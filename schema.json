@@ -175,6 +175,7 @@
             "key"  : "labelTemplate",
             "label": "Label Template",
             "placeholder" : "{{ row }}",
+            "hidden": true,
             "nested": true
           },
           {
