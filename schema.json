@@ -7,6 +7,7 @@
     "description": "A Tree View component for Budibase",
     "hasChildren" : true,
     "showEmptyState" : false,
+    "actions": ["RefreshDatasource"],
     "styles" : [ "size" ],
     "icon": "TreeCollapseAll",
     "context" : [
@@ -187,12 +188,14 @@
           {
             "type" : "boolean",
             "key" : "groupBy",
-            "label" : "Group By"
+            "label" : "Group By",
+            "dependsOn" : { "setting" : "recursive" , "value" : true, "invert": true }
           },
           {
             "type" : "boolean",
             "key" : "recursive",
-            "label" : "Recursive"
+            "label" : "Recursive",
+            "dependsOn" : { "setting" : "groupBy" , "value" : true, "invert": true  }
           }
         ]
       },
@@ -236,17 +239,9 @@
           {
             "type" : "field",
             "key" : "joinField",
-            "label" : "Parent ID",
+            "label" : "Parent Value",
             "resetOn" : "datasource"
-          },
-          {
-            "type" : "number",
-            "key" : "depth",
-            "label" : "Max Depth",
-            "defaultValue" : "4",
-            "minValue" : "0"
           }
-
         ]
       },
       {

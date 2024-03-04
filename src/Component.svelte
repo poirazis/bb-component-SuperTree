@@ -4,7 +4,7 @@
   import Tree from "../lib/Tree.svelte";
   import Skeleton from "./Skeleton.svelte";
 
-  const { styleable, fetchData, processStringSync, LuceneUtils, API, builderStore, notificationStore } = getContext("sdk")
+  const { styleable, ActionTypes, Provider, ContextScopes, fetchData, processStringSync, LuceneUtils, API, builderStore, notificationStore } = getContext("sdk")
   const component = getContext("component")
 
   export let source 
@@ -43,13 +43,15 @@
   let groupByValues = new Set();
   let rootNodes = []
   let selectedNodes = new writable([])
-  let queryExtensions = {}
+  let loadedDatasource
+  let query
+  let defaultQuery
 
   $: defaultQuery = LuceneUtils.buildLuceneQuery(filter)
-  $: query = extendQuery(defaultQuery, queryExtensions)
+  $: query = extendQuery(defaultQuery, {})
 
   // Fetch data and refresh when needed
-  $: fetch = createFetch( source == "data" ? datasource : null )
+  $: fetch = createFetch( datasource )
   $: fetch.update({
     query,
     sortColumn,
@@ -57,22 +59,33 @@
     limit,
     paginate,
   })
+
   $: definition = $fetch?.definition
   $: primaryDisplay = definition?.primaryDisplay
   $: getRootNodes ($fetch?.rows, groupNodeLabel)
+  $: actions = [
+    {
+      type: ActionTypes.RefreshDatasource,
+      callback: () => fetch.refresh()
+    }]
 
   const createFetch = datasource => {
-    return fetchData({
-      API,
-      datasource,
-      options: {
-        query,
-        sortColumn,
-        sortOrder,
-        limit,
-        paginate,
-      },
-    })
+    if ( loadedDatasource != datasource ) {
+      loadedDatasource = datasource
+      return fetchData({
+        API,
+        datasource,
+        options: {
+          query,
+          sortColumn,
+          sortOrder,
+          limit,
+          paginate,
+        },
+      })
+    } else {
+      return fetch
+    }
   }
 
   const extendQuery = (defaultQuery, extensions) => {
@@ -125,6 +138,21 @@
           icon: groupNodeIcon, 
           label: processStringSync( groupNodeLabel || "{{ value }}" , { value : x } ),
           children : getGroupChildNodes(x)} })
+    } else if ( recursive ) { 
+        rows.filter( x => !x[joinField] )
+            .map( ( row, idx, arr ) => { rootNodes = [ ...rootNodes, 
+              { 
+                id: row[valueColumn],
+                renderSlot: true,
+                hasSlot : $component.children,
+                nodeSelection: nodeSelection,
+                selectedNodes: selectedNodes,
+                icon: nodeIcon, 
+                open: $builderStore.inBuilder && $component.children && idx == 0,
+                label : row[labelColumn || primaryDisplay],
+                children: getChildNodes(row , rows)
+            }] 
+        })
     } else {
       rows.map( (row, idx )=> { rootNodes = [ ...rootNodes, 
         { 
@@ -139,16 +167,7 @@
           children: getChildNodes(row)
         }]  
       })
-    }
-    if ( recursive && joinField ) {
-      rows.map( row => {
-        rootNodes = [ ...rootNodes, { 
-          icon: nodeIcon, 
-          renderSlot: true,
-          hasSlot : $component.children,
-          label : row[labelColumn || primaryDisplay]}]
-      })
-    }    
+    }   
   }
 
   const getGroupChildNodes = groupValue => {
@@ -168,8 +187,9 @@
     })
   }
 
-  const getChildNodes = row => {
+  const getChildNodes = ( row, rows ) => {
     let children = []
+
     if ( linkFields?.length ) {
       linkFields.forEach(element => {
         if (validLinkField(element)) children.push( {
@@ -187,9 +207,25 @@
             quiet,
             label: link.primaryDisplay } })
         })
-        
       });
     }
+
+    if ( recursive && joinField) {
+      rows.filter( x => x[joinField] == row[valueColumn] ).forEach( node => {
+        children.push( {
+          renderSlot : true,
+          icon: nodeIcon,
+          id: node[valueColumn],
+          label: node[labelColumn],
+          quiet,
+          nodeSelection: nodeSelection,
+          selectedNodes: selectedNodes,
+          children: getChildNodes( node, rows )
+          })
+        }
+      )
+    }
+
     return children
   }
 
@@ -215,17 +251,19 @@
   const handleNodeClick = ( e ) => {
     onNodeClick?.( e.detail )
   }
+
 </script>
   <div use:styleable={$component.styles} >
+    <Provider actions={actions} scope={ContextScopes.Global}>
     <ul class="spectrum-TreeView"
     class:spectrum-TreeView--quiet={quiet}
     style:visibility={"visible"}
-    style:height={ $fetch?.loading ? "2rem" : $component.styles.normal.height ?? "auto"}
+    style:height={"auto"}
     style:overflow-y={"auto"}
     >
-      {#if $fetch?.loading}
+      {#if $fetch.loading && !$fetch.loaded}
         <Skeleton> Loading </Skeleton>
-      {:else if $fetch?.loaded}
+      {:else if $fetch?.loaded && rootNodes.length}
         {#if rootless}
           {#each [...rootNodes] as {id, icon , label, renderSlot, children, open}, idx}
             <Tree 
@@ -265,8 +303,13 @@
             <slot />
           </Tree>
         {/if}
+      {:else}
+        <li class="spectrum-TreeView-item">
+          <a class="spectrum-TreeView-itemLink"> No Records Found </a>
+        </li>
       {/if}
     </ul>
+    </Provider>
   </div>
 
 

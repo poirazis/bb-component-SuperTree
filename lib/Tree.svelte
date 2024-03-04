@@ -40,14 +40,15 @@
 
 <!-- svelte-ignore a11y-missing-attribute -->
 <!-- svelte-ignore a11y-click-events-have-key-events -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
 <li class="spectrum-TreeView-item"
   class:is-disabled={disabled}
   class:is-selected={$selectedNodes.findIndex( x => x.id == id ) > -1 }
   class:is-open={open} >
   <a 
     class="spectrum-TreeView-itemLink"
-    style:padding-left={ children?.length || hasSlot || quiet ? "0.25rem" : "1rem" }
-    on:click|stopPropagation={handleClick}
+    style:padding-left={ children?.length || hasSlot || quiet ? "0.25rem" : "0.5rem" }
+    on:click={handleClick}
     >
     {#if (children?.length || (hasSlot &&  renderSlot) ) && !quiet} 
       <i class="ri-arrow-right-s-line chevron" class:open> </i>
