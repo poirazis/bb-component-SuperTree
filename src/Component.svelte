@@ -3,6 +3,7 @@
   import { writable } from "svelte/store";
   import Tree from "../lib/Tree.svelte";
   import Skeleton from "./Skeleton.svelte";
+  import CellString from "../../bb_super_components_shared/src/lib/SuperTableCells/CellString.svelte";
 
   const {
     styleable,
@@ -25,6 +26,7 @@
 
   export let collapsed;
   export let quiet;
+  export let searchable;
   export let disabled;
   export let rootless;
   export let rootIcon;
@@ -37,7 +39,7 @@
   export let maxNodeSelection;
 
   export let datasource;
-  export let filter = {};
+  export let filter = [];
   export let sortColumn;
   export let sortOrder;
   export let limit;
@@ -56,16 +58,18 @@
   const dataSourceStore = memo(datasource);
   const treeOptions = memo({});
 
-  $: dataSourceStore.set(datasource);
-
   let groupByValues = new Set();
   let rootNodes = [];
   let selectedNodes = new writable([]);
   let query = {};
   let defaultQuery;
+  let searchFilter;
+  let hover;
 
+  $: dataSourceStore.set(datasource);
   $: defaultQuery = QueryUtils.buildQuery(filter);
-  $: query = extendQuery(defaultQuery, {});
+  $: queryExtension = QueryUtils.buildQuery(searchFilter);
+  $: query = extendQuery(defaultQuery, [queryExtension]);
 
   // Fetch data and refresh when needed
   $: fetch = createFetch($dataSourceStore);
@@ -79,7 +83,15 @@
 
   $: definition = $fetch?.definition;
   $: primaryDisplay = definition?.primaryDisplay;
-  $: getRootNodes($fetch?.rows, groupNodeLabel);
+  $: buildTree(
+    $fetch?.rows,
+    treeType,
+    valueColumn,
+    labelColumn,
+    joinField,
+    groupField,
+    groupNodeLabel
+  );
   $: actions = [
     {
       type: ActionTypes.RefreshDatasource,
@@ -115,7 +127,8 @@
     return extendedQuery;
   };
 
-  const getRootNodes = (rows) => {
+  // Initialize Tree Structure
+  const buildTree = (rows, filter) => {
     let nodes = [];
     groupByValues.clear();
     rootNodes = [];
@@ -130,8 +143,6 @@
           type: "group",
           renderSlot: false,
           hasSlot: $component.children,
-          nodeSelection: nodeSelection,
-          selectedNodes: selectedNodes,
           id: x,
           open: $builderStore.inBuilder && $component.children && idx == 0,
           icon: groupNodeIcon,
@@ -151,9 +162,6 @@
               id: row[valueColumn],
               renderSlot: true,
               hasSlot: $component.children,
-              nodeSelection: nodeSelection,
-              selectedNodes: selectedNodes,
-              icon: nodeIcon,
               open: $builderStore.inBuilder && $component.children && idx == 0,
               label: row[labelColumn || primaryDisplay],
               children: getChildNodes(row, rows),
@@ -183,14 +191,11 @@
       .map((node, idx) => {
         return {
           id: node[valueColumn],
-          icon: nodeIcon,
           renderSlot: true,
           quiet,
           hasSlot: $component.children,
           open: $builderStore.inBuilder && $component.children && idx == 0,
           label: node[labelColumn || primaryDisplay],
-          nodeSelection: nodeSelection,
-          selectedNodes: selectedNodes,
           children: getChildNodes(node),
         };
       });
@@ -228,12 +233,9 @@
         .forEach((node) => {
           children.push({
             renderSlot: true,
-            icon: nodeIcon,
             id: node[valueColumn],
             label: node[labelColumn],
             quiet,
-            nodeSelection: nodeSelection,
-            selectedNodes: selectedNodes,
             children: getChildNodes(node, rows),
           });
         });
@@ -245,6 +247,10 @@
   const validLinkField = (field) => {
     return definition.schema[field]?.type == "link";
   };
+
+  const searchTree = (node, term) => {};
+
+  const filterTree = (term) => {};
 
   const handleNodeSelect = (e) => {
     let index = $selectedNodes.findIndex((x) => x.id == e.detail.id);
@@ -267,16 +273,64 @@
     onNodeClick?.(e.detail);
   };
 
+  const handleSearch = (e) => {
+    // For non recursive trees the filtering is done server side
+    if (e.detail) {
+      searchFilter = [
+        {
+          field: valueColumn,
+          operator: "fuzzy",
+          value: e.detail,
+          type: "string",
+          valueType: "Value",
+        },
+      ];
+    } else {
+      searchFilter = [];
+    }
+  };
+
+  // Expose the Super Tree Context fot the Child nodes and nested Trees
   $: treeOptions.set({
     nodeIcon,
     nodeSelection,
+    selectableBranches,
     selectedNodes,
     checkboxes,
   });
+
+  $: cellOptions = {
+    placeholder:
+      "Search " + (branchName || datasource?.label || $component.name),
+    disabled,
+    padding: "0.5rem",
+    icon: "ri-search-line",
+    debounce: 200,
+    clearValueIcon: true,
+    role: "inlineInput",
+  };
+
   setContext("superTreeOptions", treeOptions);
 </script>
 
+<!-- svelte-ignore a11y-no-static-element-interactions -->
 <div use:styleable={$component.styles}>
+  {#if (searchable && hover) || searchFilter?.length}
+    <div class="searchHeader" on:mouseleave={() => (hover = false)}>
+      <CellString {cellOptions} on:change={handleSearch} />
+    </div>
+  {:else if searchable}
+    <div
+      class="searchHeader title"
+      on:mouseenter={() => (hover = true)}
+      on:mouseleave={() => (hover = false)}
+    >
+      {branchName}
+    </div>
+  {:else}
+    <div class="searchHeader">{branchName}</div>
+  {/if}
+
   <Provider {actions} scope={ContextScopes.Global}>
     <ul
       class="spectrum-TreeView"
@@ -337,8 +391,29 @@
 
 <style>
   .spectrum-TreeView {
-    min-width: 250px;
+    width: 100%;
     margin: unset;
     overflow-y: auto;
+  }
+
+  .searchHeader {
+    min-width: 280px;
+    min-height: 2.4rem;
+    display: flex;
+    align-items: flex-end;
+    border-bottom: 2px solid var(--spectrum-global-color-gray-300);
+    margin-bottom: 8px;
+  }
+
+  .searchHeader.title {
+    padding-bottom: 0.5rem;
+    padding-left: 1.75rem;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .searchHeader:hover {
+    border-bottom: 2px solid var(--spectrum-global-color-gray-500);
+    color: var(--spectrum-global-color-gray-800);
   }
 </style>

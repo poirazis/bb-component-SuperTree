@@ -107,6 +107,11 @@
       },
       {
         "type": "boolean",
+        "key": "searchable",
+        "label": "Search"
+      },
+      {
+        "type": "boolean",
         "key": "disabled",
         "label": "Disabled"
       },

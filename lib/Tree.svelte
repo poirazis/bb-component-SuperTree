@@ -30,11 +30,21 @@
     if (children?.length || hasSlot) {
       open = !open;
       return;
-    } else if ($treeOptions.nodeSelection) {
+    }
+
+    if ($treeOptions.nodeSelection) {
       dispatch("nodeSelect", { id, label });
       return;
     }
+
     dispatch("nodeClick", { id, label });
+  };
+
+  const handleSelect = (e) => {
+    if ($treeOptions.nodeSelection) {
+      dispatch("nodeSelect", { id, label });
+      return;
+    }
   };
 </script>
 
@@ -63,9 +73,15 @@
 
     {#if $treeOptions?.checkboxes}
       {#if selected}
-        <i class="ri-checkbox-line icon" />
+        <i
+          on:click|stopPropagation={handleSelect}
+          class="ri-checkbox-fill icon"
+        />
       {:else}
-        <i class="ri-checkbox-blank-line icon" />
+        <i
+          on:click|stopPropagation={handleSelect}
+          class="ri-checkbox-blank-line icon"
+        />
       {/if}
     {/if}
 
@@ -109,7 +125,6 @@
 <style>
   .spectrum-TreeView-item {
     transition: all 130ms;
-    padding-left: 0.25rem;
   }
 
   .spectrum-TreeView-itemLink {
@@ -121,8 +136,9 @@
   }
 
   .icon {
-    font-size: 18px;
-    color: var(--spectrum-global-color-gray-700);
+    font-size: 16px;
+    color: var(--spectrum-global-color-gray-600);
+    z-index: 1;
   }
   .chevron {
     transition: all 130ms;
