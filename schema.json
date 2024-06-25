@@ -5,11 +5,12 @@
     "name": "bb-component-SuperTree",
     "friendlyName": "Super Tree",
     "description": "A Tree View component for Budibase",
-    "hasChildren" : true,
-    "showEmptyState" : false,
-    "styles" : [ "size" ],
+    "hasChildren": true,
+    "showEmptyState": false,
+    "actions": ["RefreshDatasource"],
+    "styles": ["size"],
     "icon": "TreeCollapseAll",
-    "context" : [
+    "context": [
       {
         "type": "static",
         "scope": "local",
@@ -57,207 +58,207 @@
     ],
     "settings": [
       {
-        "type" : "select",
-        "key" : "source",
-        "label" : "Nodes Source",
-        "defaultValue" : "data",
-        "options" : [
-          { "label" : "Datasource", "value" : "data" },
-          { "label" : "Custom", "value" : "custom" }
+        "type": "dataSource",
+        "key": "datasource",
+        "label": "Data",
+        "required": true
+      },
+      {
+        "type": "field/sortable",
+        "key": "sortColumn",
+        "label": "Sort By",
+        "resetOn": "datasource"
+      },
+      {
+        "type": "select",
+        "key": "sortOrder",
+        "label": "Sort Order",
+        "options": [
+          { "label": "Ascending", "value": "ascending" },
+          { "label": "Descending", "value": "descending" }
         ]
       },
       {
-        "type" : "text",
-        "key" : "branchName",
-        "label" : "Tree Root Name"
+        "type": "filter",
+        "key": "filter",
+        "label": "Filter"
       },
       {
-        "type" : "options",
-        "key" : "customNodes",
-        "label" : "Nodes",
-        "defaultValue": [
-          { "label" : "Node 1", "value": "1"},
-          { "label" : "Node 2", "value": "2"},
-          { "label" : "Node 3", "value": "3"}
-        ],
-        "dependsOn" : { "setting" : "source" , "value" : "custom" }
-      },
-
-      {
-        "type" : "boolean",
-        "key" : "disabled",
-        "label" : "Disabled"
+        "type": "number",
+        "label": "Limit",
+        "key": "limit",
+        "defaultValue": 50
       },
       {
-        "type" : "boolean",
-        "key" : "rootless",
-        "label" : "Rootless"
+        "type": "select",
+        "key": "treeType",
+        "label": "Tree Type",
+        "defaultValue": "list",
+        "options": [
+          { "label": "List", "value": "list" },
+          { "label": "Recursive", "value": "recursive" },
+          { "label": "Group By", "value": "groupBy" }
+        ]
       },
       {
-        "type" : "boolean",
-        "key" : "collapsed",
-        "label" : "Collapsed",
-        "defaultValue" : true,
-        "dependsOn" : { "setting" : "rootless" , "value" : true, "invert" : true }
+        "type": "text",
+        "key": "branchName",
+        "label": "Root Node Text"
       },
       {
-        "type" : "boolean",
-        "key" : "quiet",
-        "label" : "Quiet"
-
+        "type": "boolean",
+        "key": "searchable",
+        "label": "Search"
       },
       {
-        "type" : "boolean",
-        "key" : "nodeSelection",
-        "label" : "Node Selection"
+        "type": "boolean",
+        "key": "disabled",
+        "label": "Disabled"
       },
       {
-        "type" : "number",
-        "key"  : "maxNodeSelection",
+        "type": "boolean",
+        "key": "rootless",
+        "label": "Rootless"
+      },
+      {
+        "type": "boolean",
+        "key": "collapsed",
+        "label": "Collapsed",
+        "defaultValue": true,
+        "dependsOn": { "setting": "rootless", "value": true, "invert": true }
+      },
+      {
+        "type": "boolean",
+        "key": "quiet",
+        "label": "Quiet"
+      },
+      {
+        "type": "boolean",
+        "key": "nodeSelection",
+        "label": "Node Selection"
+      },
+      {
+        "type": "boolean",
+        "key": "checkboxes",
+        "label": "Checkboxes",
+        "dependsOn": "nodeSelection"
+      },
+      {
+        "type": "number",
+        "key": "maxNodeSelection",
         "label": "Max Selected",
-        "dependsOn" : "nodeSelection",
-        "min" : 1,
-        "defaultValue" : 1
+        "dependsOn": "nodeSelection",
+        "min": 1,
+        "defaultValue": 1
       },
       {
-        "section" : true,
-        "name" : "Data Settings",
-        "dependsOn" : { "setting" : "source" , "value" : "data" },
-        "settings" : [
+        "type": "text",
+        "key": "selectedIds",
+        "label": "Selected IDs",
+        "placeholder": "Comma seperated list",
+        "dependsOn": "nodeSelection"
+      },
+      {
+        "section": true,
+        "name": "Tree Settings",
+        "settings": [
           {
-            "type" : "dataSource",
-            "key" : "datasource",
-            "label" : "Data",
-            "required" : true
+            "type": "field",
+            "key": "valueColumn",
+            "label": "Value Column",
+            "resetOn": "datasource",
+            "defaultValue": "_id",
+            "required": true
           },
           {
-            "type": "field/sortable",
-            "key": "sortColumn",
-            "label": "Sort By",
+            "type": "field",
+            "key": "labelColumn",
+            "label": "Label Column",
             "resetOn": "datasource"
           },
           {
-            "type": "select",
-            "key": "sortOrder",
-            "label": "Sort Order",
-            "options": [
-              { "label": "Ascending", "value": "ascending" },
-              { "label": "Descending", "value": "descending" }
-            ]
-          },
-          {
-            "type": "filter",
-            "key": "filter",
-            "label": "Filter"
-          },
-          {
-            "type": "number",
-            "label": "Limit",
-            "key": "limit",
-            "defaultValue": 50
-          },
-          {
-            "type" : "field",
-            "key" : "valueColumn",
-            "label" : "Value Column",
-            "resetOn" : "datasource",
-            "defaultValue" : "_id",
-            "required" : true
-          },
-          {
-            "type" : "field",
-            "key" : "labelColumn",
-            "label" : "Label Column",
-            "resetOn" : "datasource"
-          },
-          {
-            "type" : "text",
-            "key"  : "labelTemplate",
+            "type": "text",
+            "key": "labelTemplate",
             "label": "Label Template",
-            "placeholder" : "{{ row }}",
+            "placeholder": "{{ row }}",
             "hidden": true,
             "nested": true
           },
           {
-            "type" : "multifield",
-            "key" : "linkFields",
-            "label" : "Link Columns",
-            "resetOn" : "datasource"
+            "type": "multifield",
+            "key": "linkFields",
+            "label": "Link Columns",
+            "resetOn": "datasource"
           },
           {
-            "type" : "boolean",
-            "key" : "groupBy",
-            "label" : "Group By"
-          },
-          {
-            "type" : "boolean",
-            "key" : "recursive",
-            "label" : "Recursive"
+            "type": "boolean",
+            "key": "showRelationships",
+            "label": "Show Relationships",
+            "dependsOn": { "setting": "groupBy", "value": true, "invert": true }
           }
         ]
       },
       {
-        "section" : true,
-        "name" : "Group By Settings",
-        "dependsOn" : "groupBy",
+        "section": true,
+        "name": "Group By Settings",
+        "dependsOn": { "setting": "treeType", "value": "groupBy" },
         "settings": [
           {
-            "type" : "field",
-            "key" : "groupField",
-            "label" : "Group By",
-            "resetOn" : "datasource"
+            "type": "field",
+            "key": "groupField",
+            "label": "Group By",
+            "resetOn": "datasource"
           },
           {
-            "type" : "text",
-            "key"  : "groupNodeLabel",
+            "type": "text",
+            "key": "groupNodeLabel",
             "label": "Group Label",
-            "nested" : true,
-            "placeholder" : "{{ value }}"
+            "nested": true,
+            "placeholder": "{{ value }}"
           },
           {
-            "type" : "boolean",
-            "key" : "groupNodeIcons",
-            "label" : "Group Icons"
+            "type": "boolean",
+            "key": "groupNodeIcons",
+            "label": "Group Icons"
           },
           {
-            "type" : "icon",
-            "key" : "groupNodeIcon",
-            "dependsOn" : "groupNodeIcons",
-            "resetOn" : "groupNodeIcons",
-            "label" : "Group Node Icon"
+            "type": "icon",
+            "key": "groupNodeIcon",
+            "dependsOn": "groupNodeIcons",
+            "resetOn": "groupNodeIcons",
+            "label": "Group Node Icon"
           }
         ]
       },
       {
-        "section" : true,
-        "name" : "Recursion Settings",
-        "dependsOn" : "recursive",
+        "section": true,
+        "name": "Recursion Settings",
+        "dependsOn": { "setting": "treeType", "value": "recursive" },
         "settings": [
           {
-            "type" : "field",
-            "key" : "joinField",
-            "label" : "Parent ID",
-            "resetOn" : "datasource"
+            "type": "field",
+            "key": "joinField",
+            "label": "Parent Value",
+            "resetOn": "datasource",
+            "info": "Will be JOINED with the Value Column"
           },
           {
-            "type" : "number",
-            "key" : "depth",
-            "label" : "Max Depth",
-            "defaultValue" : "4",
-            "minValue" : "0"
+            "type": "number",
+            "key": "depth",
+            "label": "Max Depth",
+            "resetOn": "recursive"
           }
-
         ]
       },
       {
-        "section" : true,
-        "name" : "Events",
-        "settings" : [
+        "section": true,
+        "name": "Events",
+        "settings": [
           {
-            "type" : "event",
-            "key" : "onNodeSelect",
-            "dependsOn" : "nodeSelection",
-            "label" : "On Node Select",
+            "type": "event",
+            "key": "onNodeSelect",
+            "dependsOn": "nodeSelection",
+            "label": "On Node Select",
             "context": [
               {
                 "label": "Node Value",
@@ -270,9 +271,9 @@
             ]
           },
           {
-            "type" : "event",
-            "key" : "onNodeClick",
-            "label" : "On Node Click",
+            "type": "event",
+            "key": "onNodeClick",
+            "label": "On Node Click",
             "context": [
               {
                 "label": "Node Value",
@@ -285,9 +286,9 @@
             ]
           },
           {
-            "type" : "event",
-            "key" : "onLinkNodeClick",
-            "label" : "On Link Click",
+            "type": "event",
+            "key": "onLinkNodeClick",
+            "label": "On Link Click",
             "context": [
               {
                 "label": "Node Value",
@@ -304,31 +305,31 @@
       {
         "section": true,
         "tag": "style",
-        "name" : "Tree Settings",
-        "settings" : [
+        "name": "Tree Settings",
+        "settings": [
           {
-            "type" : "boolean",
-            "key" : "rootIcons",
-            "label" : "Root Icon"
+            "type": "boolean",
+            "key": "rootIcons",
+            "label": "Root Icon"
           },
           {
-            "type" : "icon",
-            "key" : "rootIcon",
-            "label" : "Root Node Icon",
-            "dependsOn" : "rootIcons",
-            "resetOn" : "rootIcons"
+            "type": "icon",
+            "key": "rootIcon",
+            "label": "Root Node Icon",
+            "dependsOn": "rootIcons",
+            "resetOn": "rootIcons"
           },
           {
-            "type" : "boolean",
-            "key" : "nodeIcons",
-            "label" : "Node Icons"
+            "type": "boolean",
+            "key": "nodeIcons",
+            "label": "Node Icons"
           },
           {
-            "type" : "icon",
-            "key" : "nodeIcon",
-            "label" : "Node Icon",
-            "dependsOn" : "nodeIcons",
-            "resetOn" : "nodeIcons"
+            "type": "icon",
+            "key": "nodeIcon",
+            "label": "Node Icon",
+            "dependsOn": "nodeIcons",
+            "resetOn": "nodeIcons"
           }
         ]
       }
