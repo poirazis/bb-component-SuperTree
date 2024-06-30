@@ -79,6 +79,14 @@
         ]
       },
       {
+        "type": "field",
+        "key": "valueColumn",
+        "label": "Value Column",
+        "resetOn": "datasource",
+        "defaultValue": "_id",
+        "required": true
+      },
+      {
         "type": "filter",
         "key": "filter",
         "label": "Filter"
@@ -101,16 +109,6 @@
         ]
       },
       {
-        "type": "text",
-        "key": "branchName",
-        "label": "Root Node Text"
-      },
-      {
-        "type": "boolean",
-        "key": "searchable",
-        "label": "Search"
-      },
-      {
         "type": "boolean",
         "key": "disabled",
         "label": "Disabled"
@@ -118,7 +116,20 @@
       {
         "type": "boolean",
         "key": "rootless",
-        "label": "Rootless"
+        "label": "Rootless",
+        "defaultValue": true
+      },
+      {
+        "type": "boolean",
+        "key": "header",
+        "label": "Header",
+        "defaultValue": true
+      },
+      {
+        "type": "text",
+        "key": "branchName",
+        "label": "Root Node Text",
+        "dependsOn": { "setting": "rootless", "value": true, "invert": true }
       },
       {
         "type": "boolean",
@@ -126,11 +137,6 @@
         "label": "Collapsed",
         "defaultValue": true,
         "dependsOn": { "setting": "rootless", "value": true, "invert": true }
-      },
-      {
-        "type": "boolean",
-        "key": "quiet",
-        "label": "Quiet"
       },
       {
         "type": "boolean",
@@ -164,14 +170,6 @@
         "settings": [
           {
             "type": "field",
-            "key": "valueColumn",
-            "label": "Value Column",
-            "resetOn": "datasource",
-            "defaultValue": "_id",
-            "required": true
-          },
-          {
-            "type": "field",
             "key": "labelColumn",
             "label": "Label Column",
             "resetOn": "datasource"
@@ -181,20 +179,20 @@
             "key": "labelTemplate",
             "label": "Label Template",
             "placeholder": "{{ row }}",
-            "hidden": true,
             "nested": true
+          },
+          {
+            "type": "boolean",
+            "key": "showRelationships",
+            "label": "List Rel/s",
+            "dependsOn": { "setting": "groupBy", "value": true, "invert": true }
           },
           {
             "type": "multifield",
             "key": "linkFields",
             "label": "Link Columns",
-            "resetOn": "datasource"
-          },
-          {
-            "type": "boolean",
-            "key": "showRelationships",
-            "label": "Show Relationships",
-            "dependsOn": { "setting": "groupBy", "value": true, "invert": true }
+            "resetOn": ["datasource", "showRelationships"],
+            "dependsOn": "showRelationships"
           }
         ]
       },
@@ -239,14 +237,36 @@
             "type": "field",
             "key": "joinField",
             "label": "Parent Value",
-            "resetOn": "datasource",
-            "info": "Will be JOINED with the Value Column"
+            "resetOn": "datasource"
           },
           {
             "type": "number",
             "key": "depth",
             "label": "Max Depth",
             "resetOn": "recursive"
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Header Settings",
+        "dependsOn": "header",
+        "settings": [
+          {
+            "type": "text",
+            "key": "headerText",
+            "label": "Text"
+          },
+          {
+            "type": "boolean",
+            "key": "searchable",
+            "label": "Search",
+            "defaultValue": true
+          },
+          {
+            "type": "buttonConfiguration",
+            "key": "buttons",
+            "label": "Buttons"
           }
         ]
       },
@@ -307,6 +327,11 @@
         "tag": "style",
         "name": "Tree Settings",
         "settings": [
+          {
+            "type": "boolean",
+            "key": "quiet",
+            "label": "Quiet"
+          },
           {
             "type": "boolean",
             "key": "rootIcons",

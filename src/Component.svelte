@@ -1,6 +1,7 @@
 <script>
   import { getContext, setContext } from "svelte";
   import { writable } from "svelte/store";
+  import { fly } from "svelte/transition";
   import Tree from "../lib/Tree.svelte";
   import Skeleton from "./Skeleton.svelte";
   import CellString from "../../bb_super_components_shared/src/lib/SuperTableCells/CellString.svelte";
@@ -15,6 +16,8 @@
     QueryUtils,
     memo,
     API,
+    BlockComponent,
+    Block,
     builderStore,
     notificationStore,
   } = getContext("sdk");
@@ -26,9 +29,12 @@
 
   export let collapsed;
   export let quiet;
+  export let buttons;
   export let searchable;
   export let disabled;
   export let rootless;
+  export let header;
+  export let headerText = "New Super Tree";
   export let rootIcon;
   export let nodeIcon;
   export let groupNodeIcon;
@@ -65,6 +71,7 @@
   let defaultQuery;
   let searchFilter;
   let hover;
+  let inEdit = false;
 
   $: dataSourceStore.set(datasource);
   $: defaultQuery = QueryUtils.buildQuery(filter);
@@ -92,6 +99,7 @@
     groupField,
     groupNodeLabel
   );
+
   $: actions = [
     {
       type: ActionTypes.RefreshDatasource,
@@ -300,8 +308,7 @@
   });
 
   $: cellOptions = {
-    placeholder:
-      "Search " + (branchName || datasource?.label || $component.name),
+    placeholder: "Search...",
     disabled,
     padding: "0.5rem",
     icon: "ri-search-line",
@@ -314,106 +321,137 @@
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
-<div use:styleable={$component.styles}>
-  {#if (searchable && hover) || searchFilter?.length}
-    <div class="searchHeader" on:mouseleave={() => (hover = false)}>
-      <CellString {cellOptions} on:change={handleSearch} />
-    </div>
-  {:else if searchable}
-    <div
-      class="searchHeader title"
-      on:mouseenter={() => (hover = true)}
-      on:mouseleave={() => (hover = false)}
-    >
-      {branchName}
-    </div>
-  {:else}
-    <div class="searchHeader">{branchName}</div>
-  {/if}
+<Block>
+  <div use:styleable={$component.styles}>
+    {#if header}
+      <div class="searchHeader">
+        {#if buttons?.length}
+          {#each buttons as { text, icon, disabled, onClick, quiet }}
+            <BlockComponent
+              type="plugin/bb-component-SuperButton"
+              props={{
+                size: "S",
+                icon,
+                text,
+                quiet,
+                disabled,
+                onClick,
+              }}
+            ></BlockComponent>
+          {/each}
+        {/if}
+        {#if (searchable && hover && !disabled) || searchFilter?.length || inEdit}
+          <div
+            in:fly={{ x: "-50%", duration: 130 }}
+            on:mouseleave={() => (hover = false)}
+            style:display={"flex"}
+            style:justify-content={"stretch"}
+            style:flex={"auto"}
+            style:border-bottom={"2px solid var(--spectrum-global-color-gray-300)"}
+          >
+            <CellString
+              {cellOptions}
+              on:change={handleSearch}
+              on:enteredit={() => (inEdit = true)}
+              on:exitedit={() => (inEdit = searchFilter?.length)}
+            />
+          </div>
+        {:else}
+          <div
+            class="title"
+            on:mouseenter={() => (hover = searchable)}
+            on:mouseleave={() => (hover = false)}
+          >
+            {headerText || datasource?.label}
+          </div>
+        {/if}
+      </div>
+    {/if}
 
-  <Provider {actions} scope={ContextScopes.Global}>
-    <ul
-      class="spectrum-TreeView"
-      class:spectrum-TreeView--quiet={quiet}
-      style:visibility={"visible"}
-      style:height={"auto"}
-      style:overflow-y={"auto"}
-    >
-      {#if $fetch.loading && !$fetch.loaded}
-        <Skeleton>Loading</Skeleton>
-      {:else if $fetch?.loaded && rootNodes.length}
-        {#if rootless}
-          {#each [...rootNodes] as { id, icon, label, renderSlot, children, open }, idx}
+    <Provider {actions} scope={ContextScopes.Global}>
+      <ul
+        class="spectrum-TreeView"
+        class:spectrum-TreeView--quiet={quiet}
+        style:visibility={"visible"}
+        style:height={"auto"}
+        style:overflow-y={"auto"}
+      >
+        {#if $fetch.loading && !$fetch.loaded}
+          <Skeleton>Loading</Skeleton>
+        {:else if $fetch?.loaded && rootNodes.length}
+          {#if rootless}
+            {#each [...rootNodes] as { id, icon, label, renderSlot, children, open }, idx}
+              <Tree
+                {id}
+                {icon}
+                {disabled}
+                hasSlot={$component.children}
+                {renderSlot}
+                label={label || "Not Set"}
+                {open}
+                {children}
+                on:nodeSelect={handleNodeSelect}
+                on:nodeClick={handleNodeClick}
+                {quiet}
+              >
+                <slot />
+              </Tree>
+            {/each}
+          {:else}
             <Tree
-              {id}
-              {icon}
+              id={"tree-root"}
+              icon={rootIcon}
+              {nodeSelection}
+              {selectedNodes}
               {disabled}
               hasSlot={$component.children}
-              {renderSlot}
-              label={label || "Not Set"}
-              {open}
-              {children}
+              renderSlot={false}
+              label={branchName || datasource?.label || $component.name}
+              children={rootNodes}
+              open={!rootless && !collapsed}
+              {quiet}
               on:nodeSelect={handleNodeSelect}
               on:nodeClick={handleNodeClick}
-              {quiet}
             >
               <slot />
             </Tree>
-          {/each}
+          {/if}
         {:else}
-          <Tree
-            id={"tree-root"}
-            icon={rootIcon}
-            {nodeSelection}
-            {selectedNodes}
-            {disabled}
-            hasSlot={$component.children}
-            renderSlot={false}
-            label={branchName || datasource?.label || $component.name}
-            children={rootNodes}
-            open={!rootless && !collapsed}
-            {quiet}
-            on:nodeSelect={handleNodeSelect}
-            on:nodeClick={handleNodeClick}
-          >
-            <slot />
-          </Tree>
+          <li class="spectrum-TreeView-item">
+            <!-- svelte-ignore a11y-invalid-attribute -->
+            <a href="#" class="spectrum-TreeView-itemLink">
+              No Records Found
+            </a>
+          </li>
         {/if}
-      {:else}
-        <li class="spectrum-TreeView-item">
-          <!-- svelte-ignore a11y-invalid-attribute -->
-          <a href="#" class="spectrum-TreeView-itemLink"> No Records Found </a>
-        </li>
-      {/if}
-    </ul>
-  </Provider>
-</div>
+      </ul>
+    </Provider>
+  </div>
+</Block>
 
 <style>
   .spectrum-TreeView {
-    width: 100%;
+    flex: 1 1 auto;
     margin: unset;
     overflow-y: auto;
   }
 
   .searchHeader {
-    min-width: 280px;
-    min-height: 2.4rem;
+    min-width: 200px;
+    height: 2rem;
     display: flex;
-    align-items: flex-end;
-    border-bottom: 2px solid var(--spectrum-global-color-gray-300);
-    margin-bottom: 8px;
+    align-items: center;
+    justify-content: stretch;
+    transition: all 230ms;
   }
 
-  .searchHeader.title {
-    padding-bottom: 0.5rem;
-    padding-left: 1.75rem;
-    font-size: 15px;
-    font-weight: 600;
-  }
-
-  .searchHeader:hover {
-    border-bottom: 2px solid var(--spectrum-global-color-gray-500);
-    color: var(--spectrum-global-color-gray-800);
+  .title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.72px;
+    text-transform: uppercase;
+    color: var(--spectrum-global-color-gray-600);
+    transition: all 230ms;
+    padding-left: 0.25rem;
   }
 </style>
