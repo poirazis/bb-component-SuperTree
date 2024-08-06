@@ -7,55 +7,39 @@
     "description": "A Tree View component for Budibase",
     "hasChildren": true,
     "showEmptyState": false,
-    "actions": ["RefreshDatasource"],
+    "actions": ["RefreshDatasource", "ClearRowSelection"],
     "styles": ["size"],
     "icon": "TreeCollapseAll",
-    "context": [
-      {
-        "type": "static",
-        "scope": "local",
-        "values": [
-          {
-            "label": "Node ID",
-            "key": "nodeId",
-            "type": "text"
-          }
-        ]
-      },
-      {
-        "type": "static",
-        "scope": "local",
-        "values": [
-          {
-            "label": "Node Child Rows",
-            "key": "children",
-            "type": "array"
-          }
-        ]
-      },
-      {
-        "type": "static",
-        "scope": "local",
-        "values": [
-          {
-            "label": "Node Label",
-            "key": "nodeLabel",
-            "type": "text"
-          }
-        ]
-      },
-      {
-        "type": "static",
-        "scope": "global",
-        "values": [
-          {
-            "label": "Selected",
-            "key": "selected",
-            "type": "array"
-          }
-        ]
-      }
-    ],
+    "context": {
+      "type": "static",
+      "values": [
+        {
+          "label": "Selected Rows",
+          "key": "selected",
+          "type": "array"
+        },
+        {
+          "label": "Menu Row",
+          "key": "menuRow",
+          "type": "object"
+        },
+        {
+          "label": "Node ID",
+          "key": "id",
+          "type": "string"
+        },
+        {
+          "label": "Node Label",
+          "key": "label",
+          "type": "string"
+        },
+        {
+          "label": "Node Children",
+          "key": "children",
+          "type": "array"
+        }
+      ]
+    },
     "settings": [
       {
         "type": "dataSource",
@@ -77,6 +61,14 @@
           { "label": "Ascending", "value": "ascending" },
           { "label": "Descending", "value": "descending" }
         ]
+      },
+      {
+        "type": "field",
+        "key": "idColumn",
+        "label": "ID Column",
+        "resetOn": "datasource",
+        "defaultValue": "_id",
+        "required": true
       },
       {
         "type": "filter",
@@ -101,14 +93,17 @@
         ]
       },
       {
-        "type": "text",
-        "key": "branchName",
-        "label": "Root Node Text"
+        "type": "field",
+        "key": "joinField",
+        "label": "Join Column",
+        "resetOn": "datasource",
+        "dependsOn": { "setting": "treeType", "value": "recursive" }
       },
       {
-        "type": "boolean",
-        "key": "searchable",
-        "label": "Search"
+        "type": "number",
+        "key": "depth",
+        "label": "Max Depth",
+        "dependsOn": { "setting": "treeType", "value": "recursive" }
       },
       {
         "type": "boolean",
@@ -118,7 +113,14 @@
       {
         "type": "boolean",
         "key": "rootless",
-        "label": "Rootless"
+        "label": "Rootless",
+        "defaultValue": true
+      },
+      {
+        "type": "text",
+        "key": "branchName",
+        "label": "Root Node Text",
+        "dependsOn": { "setting": "rootless", "value": true, "invert": true }
       },
       {
         "type": "boolean",
@@ -126,11 +128,6 @@
         "label": "Collapsed",
         "defaultValue": true,
         "dependsOn": { "setting": "rootless", "value": true, "invert": true }
-      },
-      {
-        "type": "boolean",
-        "key": "quiet",
-        "label": "Quiet"
       },
       {
         "type": "boolean",
@@ -159,42 +156,133 @@
         "dependsOn": "nodeSelection"
       },
       {
+        "type": "boolean",
+        "key": "header",
+        "label": "Header",
+        "defaultValue": true
+      },
+      {
         "section": true,
-        "name": "Tree Settings",
+        "name": "Header Settings",
+        "dependsOn": "header",
+        "collapsed": true,
         "settings": [
           {
-            "type": "field",
-            "key": "valueColumn",
-            "label": "Value Column",
-            "resetOn": "datasource",
-            "defaultValue": "_id",
-            "required": true
+            "type": "text",
+            "key": "headerText",
+            "label": "Text"
           },
           {
-            "type": "field",
-            "key": "labelColumn",
-            "label": "Label Column",
-            "resetOn": "datasource"
+            "type": "boolean",
+            "key": "searchable",
+            "label": "Search",
+            "defaultValue": true
           },
+          {
+            "type": "boolean",
+            "key": "actionMenu",
+            "label": "Action Menu",
+            "defaultValue": false
+          },
+          {
+            "type": "number",
+            "key": "showButtons",
+            "label": "Show Buttons",
+            "min": 0,
+            "defaultValue": 0,
+            "dependsOn": "actionMenu"
+          },
+          {
+            "type": "buttonConfiguration",
+            "key": "menuItems",
+            "label": "Menu Items",
+            "dependsOn": "actionMenu",
+            "nested": true,
+            "wide": true
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Branch Settings",
+        "dependsOn": { "setting": "treeType", "value": "list", "invert": true },
+        "collapsed": true,
+        "settings": [
+          {
+            "type": "text",
+            "key": "branchLabelTemplate",
+            "label": "Label Template",
+            "placeholder": "{{ Row.primaryDisplay }}",
+            "nested": true
+          },
+          {
+            "type": "boolean",
+            "key": "branchMenu",
+            "label": "Branch Menu",
+            "defaultValue": false
+          },
+          {
+            "type": "buttonConfiguration",
+            "key": "branchMenuItems",
+            "label": "Branch Menu Items",
+            "dependsOn": "branchMenu",
+            "wide": true,
+            "nested": true
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Node Settings",
+        "collapsed": true,
+        "settings": [
           {
             "type": "text",
             "key": "labelTemplate",
             "label": "Label Template",
-            "placeholder": "{{ row }}",
-            "hidden": true,
+            "placeholder": "{{ Row.primaryDisplay }}",
             "nested": true
+          },
+          {
+            "type": "boolean",
+            "key": "showRelationships",
+            "label": "List Rel/s",
+            "dependsOn": { "setting": "groupBy", "value": true, "invert": true }
           },
           {
             "type": "multifield",
             "key": "linkFields",
             "label": "Link Columns",
-            "resetOn": "datasource"
+            "resetOn": ["datasource", "showRelationships"],
+            "dependsOn": "showRelationships"
           },
           {
-            "type": "boolean",
-            "key": "showRelationships",
-            "label": "Show Relationships",
-            "dependsOn": { "setting": "groupBy", "value": true, "invert": true }
+            "type": "select",
+            "key": "nodeMenu",
+            "label": "Node Menu",
+            "defaultValue": false,
+            "options": [
+              { "label": "Disabled", "value": false },
+              { "label": "Same as Branch", "value": "branch" },
+              { "label": "Extend Branch Menu", "value": "branchExtend" },
+              { "label": "Separate", "value": true }
+            ]
+          },
+          {
+            "type": "number",
+            "key": "nodeShowButtons",
+            "label": "Show Buttons",
+            "min": 0,
+            "defaultValue": 0,
+            "dependsOn": "nodeMenu"
+          },
+          {
+            "type": "buttonConfiguration",
+            "key": "nodeMenuItems",
+            "label": "Menu Items",
+            "dependsOn": { "setting": "nodeMenu", "value": true },
+            "wide": true,
+            "nested": true
           }
         ]
       },
@@ -232,26 +320,6 @@
       },
       {
         "section": true,
-        "name": "Recursion Settings",
-        "dependsOn": { "setting": "treeType", "value": "recursive" },
-        "settings": [
-          {
-            "type": "field",
-            "key": "joinField",
-            "label": "Parent Value",
-            "resetOn": "datasource",
-            "info": "Will be JOINED with the Value Column"
-          },
-          {
-            "type": "number",
-            "key": "depth",
-            "label": "Max Depth",
-            "resetOn": "recursive"
-          }
-        ]
-      },
-      {
-        "section": true,
         "name": "Events",
         "settings": [
           {
@@ -261,12 +329,8 @@
             "label": "On Node Select",
             "context": [
               {
-                "label": "Node Value",
-                "key": "id"
-              },
-              {
-                "label": "Node Label",
-                "key": "label"
+                "label": "Selected Rows",
+                "key": "selectedRows"
               }
             ]
           },
@@ -291,7 +355,11 @@
             "label": "On Link Click",
             "context": [
               {
-                "label": "Node Value",
+                "label": "Node Row",
+                "key": "row"
+              },
+              {
+                "label": "Node ID",
                 "key": "id"
               },
               {
@@ -307,6 +375,11 @@
         "tag": "style",
         "name": "Tree Settings",
         "settings": [
+          {
+            "type": "boolean",
+            "key": "quiet",
+            "label": "Quiet"
+          },
           {
             "type": "boolean",
             "key": "rootIcons",
@@ -330,6 +403,27 @@
             "label": "Node Icon",
             "dependsOn": "nodeIcons",
             "resetOn": "nodeIcons"
+          },
+          {
+            "type": "icon",
+            "key": "menuIcon",
+            "label": "Menu Icon",
+            "defaultValue": "ri-more-fill",
+            "dependsOn": "actionMenu"
+          },
+          {
+            "type": "icon",
+            "key": "branchMenuIcon",
+            "label": "Branch Menu Icon",
+            "defaultValue": "ri-more-fill",
+            "dependsOn": "branchMenu"
+          },
+          {
+            "type": "icon",
+            "key": "nodeMenuIcon",
+            "label": "Menu Menu Icon",
+            "defaultValue": "ri-more-fill",
+            "dependsOn": "nodeMenu"
           }
         ]
       }
