@@ -1,48 +1,52 @@
 <script>
   import { getContext, setContext } from "svelte";
   import { writable } from "svelte/store";
+
   import Tree from "../lib/Tree.svelte";
   import Skeleton from "./Skeleton.svelte";
   import CellString from "../../bb_super_components_shared/src/lib/SuperTableCells/CellString.svelte";
   import SuperPopover from "../../bb_super_components_shared/src/lib/SuperPopover/SuperPopover.svelte";
+  import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
 
   const {
     styleable,
     ActionTypes,
     Provider,
-    ContextScopes,
     fetchData,
     processStringSync,
     QueryUtils,
     memo,
     API,
-    BlockComponent,
-    Block,
     builderStore,
     notificationStore,
+    enrichButtonActions,
   } = getContext("sdk");
 
   const component = getContext("component");
+  const fullContext = getContext("context");
 
   export let branchName;
   export let treeType = "list";
 
   export let collapsed;
   export let quiet;
-  export let buttons;
+
   export let searchable;
   export let disabled;
   export let rootless;
+
   export let header;
   export let headerText = "New Super Tree";
   export let actionMenu;
-  export let menuIcon;
+  export let showButtons;
+  export let menuIcon = "ri-more-fill";
   export let menuItems;
   export let rootIcon;
 
   export let nodeIcon;
   export let nodeMenu;
   export let nodeMenuIcon = "ri-more-fill";
+  export let nodeShowButtons;
   export let nodeMenuItems;
   export let groupNodeIcon;
 
@@ -58,8 +62,10 @@
   export let sortOrder;
   export let limit;
   export let paginate;
+
+  export let idColumn;
   export let labelColumn;
-  export let valueColumn;
+  export let labelTemplate;
 
   export let joinField;
   export let groupField;
@@ -75,6 +81,7 @@
   let groupByValues = new Set();
   let rootNodes = [];
   let selectedNodes = new writable([]);
+  let menuStore = new writable({});
   let query = {};
   let defaultQuery;
   let searchFilter;
@@ -83,10 +90,39 @@
   let openMenu = false;
   let menuAnchor;
 
+  $: headerButtons =
+    showButtons < menuItems?.length
+      ? menuItems.slice(0, showButtons)
+      : menuItems;
+
+  $: headerMenuItems =
+    showButtons < menuItems?.length
+      ? menuItems.slice(showButtons, menuItems.length)
+      : [];
+
+  $: nodeButtons =
+    nodeShowButtons < nodeMenuItems?.length
+      ? nodeMenuItems.slice(0, nodeShowButtons)
+      : nodeMenuItems;
+
+  $: nodeMenuDropItems =
+    nodeShowButtons < nodeMenuItems?.length
+      ? nodeMenuItems.slice(nodeShowButtons, nodeMenuItems.length)
+      : [];
+
   $: dataSourceStore.set(datasource);
   $: defaultQuery = QueryUtils.buildQuery(filter);
   $: queryExtension = QueryUtils.buildQuery(searchFilter);
   $: query = extendQuery(defaultQuery, [queryExtension]);
+  $: if (
+    $builderStore.inBuilder &&
+    $component.selected &&
+    !joinField &&
+    auto_join_field
+  ) {
+    builderStore.actions.updateProp("joinField", auto_join_field);
+    builderStore.actions.updateProp("treeType", "recursive");
+  }
 
   // Fetch data and refresh when needed
   $: fetch = createFetch($dataSourceStore);
@@ -98,12 +134,14 @@
     paginate,
   });
 
+  $: parseJoinField($fetch?.rows, joinField, treeType);
+
   $: definition = $fetch?.definition;
+  $: auto_join_field = detectJoinField(definition);
   $: primaryDisplay = definition?.primaryDisplay;
   $: buildTree(
     $fetch?.rows,
     treeType,
-    valueColumn,
     labelColumn,
     joinField,
     groupField,
@@ -116,6 +154,37 @@
       callback: () => fetch.refresh(),
     },
   ];
+  // Expose the Super Tree Context fot the Child nodes and nested Trees
+  $: treeOptions.set({
+    nodeIcon,
+    nodeSelection,
+    selectableBranches,
+    selectedNodes,
+    menuStore,
+    checkboxes,
+    nodeMenu,
+    nodeMenuIcon,
+    nodeMenuItems,
+    nodeButtons,
+    nodeMenuDropItems,
+  });
+
+  $: cellOptions = {
+    placeholder: "Search...",
+    disabled,
+    padding: "0.5rem",
+    debounce: 200,
+    clearValueIcon: true,
+    role: "inlineInput",
+  };
+
+  $: menuId = $menuStore;
+  $: menuRow = menuId ? $fetch.rows.find((e) => e._id == menuId) : {};
+
+  $: context = {
+    selected: $selectedNodes,
+    menuRow,
+  };
 
   const createFetch = (datasource) => {
     return fetchData({
@@ -177,11 +246,11 @@
           rootNodes = [
             ...rootNodes,
             {
-              id: row[valueColumn],
+              id: row[idColumn],
               renderSlot: true,
               hasSlot: $component.children,
               open: $builderStore.inBuilder && $component.children && idx == 0,
-              label: row[labelColumn || primaryDisplay],
+              label: row[primaryDisplay],
               children: getChildNodes(row, rows),
             },
           ];
@@ -191,11 +260,11 @@
         rootNodes = [
           ...rootNodes,
           {
-            id: row[valueColumn],
+            id: row[idColumn],
             renderSlot: true,
             hasSlot: $component.children,
             open: $builderStore.inBuilder && $component.children && idx == 0,
-            label: row[labelColumn || primaryDisplay || valueColumn],
+            label: row[primaryDisplay],
             children: getChildNodes(row),
           },
         ];
@@ -208,7 +277,7 @@
       .filter((row) => row[groupField] == groupValue)
       .map((node, idx) => {
         return {
-          id: node[valueColumn],
+          id: node[idColumn],
           renderSlot: true,
           quiet,
           hasSlot: $component.children,
@@ -247,28 +316,23 @@
 
     if (treeType == "recursive" && joinField) {
       rows
-        .filter((x) => x[joinField] == row[valueColumn])
+        .filter((x) => x[joinField]?._id == row[idColumn])
         .forEach((node) => {
           children.push({
             renderSlot: true,
-            id: node[valueColumn],
-            label: node[labelColumn],
+            id: node[idColumn],
+            label: node[labelColumn || primaryDisplay],
             quiet,
             children: getChildNodes(node, rows),
           });
         });
     }
-
     return children;
   };
 
   const validLinkField = (field) => {
     return definition.schema[field]?.type == "link";
   };
-
-  const searchTree = (node, term) => {};
-
-  const filterTree = (term) => {};
 
   const handleNodeSelect = (e) => {
     let index = $selectedNodes.findIndex((x) => x.id == e.detail.id);
@@ -284,7 +348,11 @@
         "Cannot select more than " + maxNodeSelection + " items"
       );
     }
-    onNodeSelect?.(index < 0 ? e.detail : undefined);
+    let selectedRows = $fetch?.rows?.filter((row) =>
+      $selectedNodes.find((x) => x.id == row._id)
+    );
+
+    onNodeSelect?.({ selectedRows });
   };
 
   const handleNodeClick = (e) => {
@@ -296,7 +364,7 @@
     if (e.detail) {
       searchFilter = [
         {
-          field: valueColumn,
+          field: labelColumn || primaryDisplay,
           operator: "fuzzy",
           value: e.detail,
           type: "string",
@@ -312,48 +380,48 @@
     openMenu = !openMenu;
   };
 
-  // Expose the Super Tree Context fot the Child nodes and nested Trees
-  $: treeOptions.set({
-    nodeIcon,
-    nodeSelection,
-    selectableBranches,
-    selectedNodes,
-    checkboxes,
-    nodeMenu,
-    nodeMenuIcon,
-    nodeMenuItems,
-  });
-
-  $: cellOptions = {
-    placeholder: "Search...",
-    disabled,
-    padding: "0.5rem",
-    icon: "ri-search-line",
-    debounce: 200,
-    clearValueIcon: true,
-    role: "inlineInput",
+  const parseJoinField = (rows, field) => {
+    if (treeType == "recursive" && field && rows?.length)
+      rows
+        .filter((x) => x[field])
+        .filter((x) => typeof x[field] == "string")
+        .map((row) => (row[field] = safeParse(row[field])));
   };
 
-  $: context = {
-    selected: $selectedNodes,
-    nodeLabel: "poi",
+  const detectJoinField = (schema) => {
+    return Object.keys(schema?.schema || {}).find((e) => e.endsWith("_self_"));
+  };
+
+  const safeParse = (str) => {
+    let res;
+    try {
+      res = JSON.parse(str)[0];
+    } catch {}
+    return res;
   };
 
   setContext("superTreeOptions", treeOptions);
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
+<!-- svelte-ignore a11y-click-events-have-key-events -->
 <div use:styleable={$component.styles}>
-  <Provider {actions} data={context} scope={ContextScopes.Global}>
+  <Provider {actions} data={context}>
     {#if header}
-      <div class="searchHeader">
+      <div
+        class="searchHeader"
+        style:border-bottom={inEdit
+          ? "1px solid var(--spectrum-global-color-blue-400)"
+          : hover
+            ? "2px solid var(--spectrum-global-color-gray-200)"
+            : "2px solid transparent"}
+      >
         {#if (searchable && hover && !disabled) || searchFilter?.length || inEdit}
           <div
             on:mouseleave={() => (hover = false)}
             style:display={"flex"}
             style:justify-content={"stretch"}
             style:flex={"auto"}
-            style:border-bottom={"2px solid var(--spectrum-global-color-gray-300)"}
           >
             <CellString
               {cellOptions}
@@ -368,123 +436,130 @@
             on:mouseenter={() => (hover = searchable)}
             on:mouseleave={() => (hover = false)}
           >
+            {#if searchable}
+              <i
+                class="ri-search-line"
+                style="font-size: 12px; color: var(--spectrum-global-color-gray-500)"
+              />
+            {/if}
             {headerText || datasource?.label}
           </div>
         {/if}
 
         {#if actionMenu && menuItems?.length}
-          {#if menuItems.length > 1}
-            <button
-              class="spectrum-ActionButton spectrum-ActionButton--sizeM spectrum-ActionButton--quiet"
-              class:is-selected={openMenu}
-              bind:this={menuAnchor}
-              on:click|stopPropagation={handleMenu}
-            >
-              <i class={menuIcon} />
-            </button>
-          {:else}
-            <Block>
-              <!-- svelte-ignore a11y-click-events-have-key-events -->
-              {#each menuItems as { text, icon, disabled, onClick, quiet }}
-                <BlockComponent
-                  type="plugin/bb-component-SuperButton"
-                  props={{
-                    size: "M",
-                    icon,
-                    text,
-                    quiet: true,
-                    disabled,
-                    onClick,
-                  }}
-                ></BlockComponent>
-              {/each}
-            </Block>
-          {/if}
-        {/if}
+          <div>
+            {#each headerButtons as { text, icon, disabled, onClick, quiet }}
+              <SuperButton
+                size="M"
+                {icon}
+                {disabled}
+                {quiet}
+                onClick={enrichButtonActions(onClick, $fullContext)}
+                {text}
+              />
+            {/each}
 
-        <SuperPopover
-          open={openMenu}
-          anchor={menuAnchor}
-          on:close={() => (openMenu = false)}
-        >
-          {#if menuItems?.length}
-            <!-- svelte-ignore a11y-click-events-have-key-events -->
-            <div class="actionMenu" on:click|stopPropagation={handleMenu}>
-              <Block>
-                {#each menuItems as { text, icon, disabled, onClick, quiet }}
-                  <BlockComponent
-                    type="plugin/bb-component-SuperButton"
-                    props={{
-                      size: "M",
-                      icon,
-                      text,
-                      quiet: true,
-                      disabled,
-                      onClick,
-                    }}
-                  ></BlockComponent>
-                {/each}
-              </Block>
-            </div>
-          {/if}
-        </SuperPopover>
+            {#if headerMenuItems.length}
+              <SuperButton
+                bind:anchor={menuAnchor}
+                size="M"
+                icon={menuIcon}
+                quiet
+                selected={openMenu}
+                onClick={handleMenu}
+                text=""
+              />
+            {/if}
+          </div>
+        {/if}
       </div>
     {/if}
 
-    <ul
-      class="spectrum-TreeView"
-      class:spectrum-TreeView--quiet={quiet}
-      style:visibility={"visible"}
-      style:height={"auto"}
-      style:overflow-y={"auto"}
-    >
-      {#if $fetch.loading && !$fetch.loaded}
-        <Skeleton>Loading</Skeleton>
-      {:else if $fetch?.loaded && rootNodes.length}
-        {#if rootless}
-          {#each [...rootNodes] as { id, icon, label, renderSlot, children, open }, idx}
+    {#if $fetch?.loading && !$fetch?.loaded}
+      <div style="height: 2rem;">
+        <Skeleton></Skeleton>
+      </div>
+    {:else}
+      <ul
+        class="spectrum-TreeView"
+        class:spectrum-TreeView--quiet={quiet}
+        style:visibility={"visible"}
+        style:height={"auto"}
+        style:overflow-y={"auto"}
+      >
+        {#if rootNodes.length}
+          {#if rootless}
+            {#each [...rootNodes] as { id, icon, label, renderSlot, children, open }, idx}
+              <Tree
+                {id}
+                {icon}
+                {disabled}
+                hasSlot={$component.children}
+                {renderSlot}
+                label={label || "Not Set"}
+                {open}
+                {children}
+                on:nodeSelect={handleNodeSelect}
+                on:nodeClick={handleNodeClick}
+                {quiet}
+              >
+                <slot />
+              </Tree>
+            {/each}
+          {:else}
             <Tree
-              {id}
-              {icon}
+              id={"tree-root"}
+              icon={rootIcon}
+              {nodeSelection}
+              {selectedNodes}
               {disabled}
               hasSlot={$component.children}
-              {renderSlot}
-              label={label || "Not Set"}
-              {open}
-              {children}
+              renderSlot={false}
+              label={branchName || datasource?.label || $component.name}
+              children={rootNodes}
+              open={!rootless && !collapsed}
+              {quiet}
               on:nodeSelect={handleNodeSelect}
               on:nodeClick={handleNodeClick}
-              {quiet}
             >
               <slot />
             </Tree>
-          {/each}
+          {/if}
         {:else}
-          <Tree
-            id={"tree-root"}
-            icon={rootIcon}
-            {nodeSelection}
-            {selectedNodes}
-            {disabled}
-            hasSlot={$component.children}
-            renderSlot={false}
-            label={branchName || datasource?.label || $component.name}
-            children={rootNodes}
-            open={!rootless && !collapsed}
-            {quiet}
-            on:nodeSelect={handleNodeSelect}
-            on:nodeClick={handleNodeClick}
-          >
-            <slot />
-          </Tree>
+          <li class="spectrum-TreeView-item">
+            <p class="spectrum-TreeView-itemLink">No Records Found</p>
+          </li>
         {/if}
-      {:else}
-        <li class="spectrum-TreeView-item">
-          <!-- svelte-ignore a11y-invalid-attribute -->
-          <a href="#" class="spectrum-TreeView-itemLink"> No Records Found </a>
-        </li>
+      </ul>
+    {/if}
+    <!-- Header Action Menu Popover -->
+    <SuperPopover
+      open={openMenu}
+      anchor={menuAnchor}
+      on:close={() => (openMenu = false)}
+    >
+      {#if headerMenuItems?.length}
+        <div
+          class="actionMenu"
+          on:click={(e) => {
+            openMenu = false;
+          }}
+        >
+          {#each headerMenuItems as { text, icon, disabled, onClick, quiet }}
+            <SuperButton
+              size="M"
+              {icon}
+              {disabled}
+              quiet
+              menuItem={true}
+              menuAlign="right"
+              onClick={enrichButtonActions(onClick, $fullContext)}
+              {text}
+            />
+          {/each}
+        </div>
       {/if}
-    </ul>
+    </SuperPopover>
   </Provider>
 </div>
 
@@ -496,20 +571,19 @@
   }
 
   .searchHeader {
-    min-width: 200px;
+    width: 100%;
     height: 2rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
-    transition: all 230ms;
+    transition: all 130ms;
   }
 
   .actionMenu {
-    width: 100%;
+    min-width: 120px;
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: stretch;
   }
 
   .title {
@@ -519,9 +593,12 @@
     text-transform: uppercase;
     color: var(--spectrum-global-color-gray-700);
     transition: all 230ms;
-    padding-left: 0.25rem;
+    padding-left: 0.35rem;
     white-space: nowrap;
     text-overflow: ellipsis;
     overflow-x: hidden;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
   }
 </style>

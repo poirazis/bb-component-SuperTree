@@ -1,9 +1,11 @@
 <script>
   import { getContext, createEventDispatcher } from "svelte";
   import SuperPopover from "../../bb_super_components_shared/src/lib/SuperPopover/SuperPopover.svelte";
+  import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
 
-  const { Provider, Block, BlockComponent, ContextScopes } = getContext("sdk");
+  const { Provider, enrichButtonActions } = getContext("sdk");
   const treeOptions = getContext("superTreeOptions");
+  const allContext = getContext("context");
 
   const dispatch = createEventDispatcher();
 
@@ -16,23 +18,22 @@
   export let id;
   export let disabled;
 
-  let anchor;
   let openMenu;
+  let menuAnchor;
   let hover;
 
   $: context = {
-    nodeId: id,
-    nodeLabel: label,
+    id,
+    label,
+    children,
   };
 
   $: if (disabled) open = false;
+
   $: selectionStore = $treeOptions.selectedNodes;
+  $: menuStore = $treeOptions.menuStore;
   $: selected = $selectionStore.findIndex((x) => x.id == id) > -1;
   $: icon = $treeOptions.nodeIcon;
-  $: row = {
-    id,
-    label,
-  };
 
   const handleClick = (e) => {
     if (disabled) return;
@@ -56,33 +57,31 @@
       return;
     }
   };
-
-  const handleMenu = (e) => {
-    openMenu = !openMenu;
-  };
 </script>
 
 <!-- svelte-ignore a11y-missing-attribute -->
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
+<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 <li
   class="spectrum-TreeView-item"
   class:is-disabled={disabled}
   class:is-selected={selected}
   class:is-open={open}
-  on:mouseenter={() => (hover = true)}
-  on:mouseleave={() => (hover = false)}
+  on:click|stopPropagation={handleSelect}
 >
   <a
     class="spectrum-TreeView-itemLink"
-    on:click={handleClick}
-    style:padding-left={children?.length ? "0.25rem" : "1.75rem"}
+    style:padding-left={children?.length ? "0.25rem" : "1.5rem"}
+    on:mouseenter={() => (hover = true)}
+    on:mouseleave={() => (hover = false)}
   >
     {#if children?.length}
       <i
         class="ri-arrow-right-s-line chevron"
         class:open
         class:childless={children?.length < 1}
+        on:click|self|stopPropagation={handleClick}
       >
       </i>
     {/if}
@@ -90,12 +89,12 @@
     {#if $treeOptions?.checkboxes}
       {#if selected}
         <i
-          on:click|stopPropagation={handleSelect}
+          on:click|preventDefault|stopPropagation={handleSelect}
           class="ri-checkbox-fill icon"
         />
       {:else}
         <i
-          on:click|stopPropagation={handleSelect}
+          on:click|preventDefault|stopPropagation={handleSelect}
           class="ri-checkbox-blank-line icon"
         />
       {/if}
@@ -104,51 +103,74 @@
     {#if icon}
       <i class={icon} class:icon />
     {/if}
+    {#if $treeOptions?.nodeButtons}
+      <div on:mousedown={() => ($menuStore = id)}>
+        {#each $treeOptions?.nodeButtons as { text, icon, disabled, quiet, onClick }}
+          <SuperButton
+            size="S"
+            {icon}
+            {text}
+            {quiet}
+            {disabled}
+            onClick={enrichButtonActions(onClick, $allContext)}
+          />
+        {/each}
+      </div>
+    {/if}
 
     {label || "Not Set"}
 
-    <!-- The Action Menu  -->
-    {#if (hover && $treeOptions?.nodeMenu && $treeOptions?.nodeMenuItems?.length) || openMenu}
-      <Block>
-        <button
-          class="spectrum-ActionButton spectrum-ActionButton--sizeS spectrum-ActionButton--quiet"
-          class:is-selected={openMenu}
-          class:is-disabled={disabled}
-          bind:this={anchor}
-          on:click|stopPropagation={handleMenu}
-        >
-          <i class={$treeOptions.nodeMenuIcon} />
-        </button>
+    <!-- The Node Action Menu  -->
+    {#if (hover || openMenu) && $treeOptions.nodeMenuDropItems?.length}
+      <div>
+        <SuperButton
+          bind:anchor={menuAnchor}
+          size="S"
+          icon={$treeOptions.nodeMenuIcon}
+          fillOnHover
+          quiet
+          onClick={(e) => {
+            openMenu = !openMenu;
+            $menuStore = openMenu ? id : false;
+          }}
+          text=""
+        />
+      </div>
 
-        <!-- svelte-ignore missing-declaration -->
-        <!-- svelte-ignore a11y-click-events-have-key-events -->
-        <SuperPopover
-          open={openMenu}
-          {anchor}
-          on:close={() => (openMenu = false)}
-        >
-          <div class="actionMenu" on:click={handleMenu}>
-            {#if $treeOptions?.nodeMenuItems?.length}
-              {#each $treeOptions?.nodeMenuItems as { text, icon, disabled, onClick }}
-                <BlockComponent
-                  type="plugin/bb-component-SuperButton"
-                  props={{
-                    size: "M",
-                    icon,
-                    text,
-                    quiet: true,
-                    disabled,
-                    onClick,
-                    context: row,
-                  }}
-                ></BlockComponent>
-              {/each}
-            {:else}
-              <p>No Actions Defined</p>
-            {/if}
+      <SuperPopover
+        open={openMenu}
+        align={"left"}
+        anchor={menuAnchor}
+        on:close={() => {
+          openMenu = false;
+        }}
+      >
+        {#if $treeOptions?.nodeMenuDropItems?.length}
+          <!-- svelte-ignore a11y-click-events-have-key-events -->
+          <!-- svelte-ignore a11y-no-static-element-interactions -->
+          <div
+            class="actionMenu"
+            on:click={(e) => {
+              openMenu = false;
+            }}
+          >
+            {#each $treeOptions?.nodeMenuDropItems as { text, icon, disabled, onClick }}
+              <SuperButton
+                size="S"
+                {icon}
+                {text}
+                quiet
+                {disabled}
+                onClick={enrichButtonActions(onClick, $allContext)}
+                menuItem
+                menuAlign="left"
+              />
+            {/each}
           </div>
-        </SuperPopover>
-      </Block>
+        {:else}
+          <p>No Actions Defined</p>
+        {/if}
+      </SuperPopover>
     {/if}
   </a>
 
@@ -175,7 +197,7 @@
       {/each}
     </ul>
     {#if renderSlot}
-      <Provider data={context} scope={ContextScopes.Local}>
+      <Provider data={context}>
         <slot />
       </Provider>
     {/if}
@@ -186,13 +208,11 @@
   .spectrum-TreeView-item {
     transition: all 130ms;
   }
-
   .spectrum-TreeView-itemLink {
     width: 100%;
     display: flex;
-    justify-content: stretch;
-    gap: 0.5rem;
-    padding-left: unset;
+    justify-content: flex-start;
+    gap: 0.25rem;
   }
 
   .icon {
@@ -203,11 +223,19 @@
   .chevron {
     transition: all 130ms;
     font-size: 16px;
-    color: var(--spectrum-global-color-gray-700);
+    color: var(--spectrum-global-color-gray-500);
+    z-index: 2;
   }
 
   .chevron.open {
     transform: rotate(90deg);
     color: var(--spectrum-global-color-gray-800);
+  }
+
+  .actionMenu {
+    min-width: 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
   }
 </style>

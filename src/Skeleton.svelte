@@ -1,12 +1,15 @@
+<script>
+  export let minHeight = "1rem";
+</script>
+
 <div class="skeleton">
-  <div class="children">
-  </div>
+  <div class="children"></div>
 </div>
 
 <style>
   .skeleton {
     height: 100%;
-    width:100%;
+    width: 100%;
     align-self: center;
     opacity: 0;
     display: flex;
