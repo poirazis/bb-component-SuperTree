@@ -3,7 +3,7 @@
   "metadata": {},
   "schema": {
     "name": "bb-component-SuperTree",
-    "friendlyName": "Super Tree",
+    "friendlyName": "Super TreeList",
     "description": "A Tree View component for Budibase",
     "hasChildren": true,
     "showEmptyState": false,
@@ -63,14 +63,6 @@
         ]
       },
       {
-        "type": "field",
-        "key": "idColumn",
-        "label": "ID Column",
-        "resetOn": "datasource",
-        "defaultValue": "_id",
-        "required": true
-      },
-      {
         "type": "filter",
         "key": "filter",
         "label": "Filter"
@@ -85,9 +77,9 @@
         "type": "select",
         "key": "treeType",
         "label": "Tree Type",
-        "defaultValue": "list",
+        "defaultValue": "flat",
         "options": [
-          { "label": "List", "value": "list" },
+          { "label": "Flat", "value": "flat" },
           { "label": "Recursive", "value": "recursive" },
           { "label": "Group By", "value": "groupBy" }
         ]
@@ -131,29 +123,8 @@
       },
       {
         "type": "boolean",
-        "key": "nodeSelection",
-        "label": "Node Selection"
-      },
-      {
-        "type": "boolean",
-        "key": "checkboxes",
-        "label": "Checkboxes",
-        "dependsOn": "nodeSelection"
-      },
-      {
-        "type": "number",
-        "key": "maxNodeSelection",
-        "label": "Max Selected",
-        "dependsOn": "nodeSelection",
-        "min": 1,
-        "defaultValue": 1
-      },
-      {
-        "type": "text",
-        "key": "selectedIds",
-        "label": "Selected IDs",
-        "placeholder": "Comma seperated list",
-        "dependsOn": "nodeSelection"
+        "key": "showRelationships",
+        "label": "List Rel/s"
       },
       {
         "type": "boolean",
@@ -181,7 +152,7 @@
           {
             "type": "boolean",
             "key": "actionMenu",
-            "label": "Action Menu",
+            "label": "Header Menu",
             "defaultValue": false
           },
           {
@@ -195,39 +166,9 @@
           {
             "type": "buttonConfiguration",
             "key": "menuItems",
-            "label": "Menu Items",
             "dependsOn": "actionMenu",
             "nested": true,
             "wide": true
-          }
-        ]
-      },
-      {
-        "section": true,
-        "name": "Branch Settings",
-        "dependsOn": { "setting": "treeType", "value": "list", "invert": true },
-        "collapsed": true,
-        "settings": [
-          {
-            "type": "text",
-            "key": "branchLabelTemplate",
-            "label": "Label Template",
-            "placeholder": "{{ Row.primaryDisplay }}",
-            "nested": true
-          },
-          {
-            "type": "boolean",
-            "key": "branchMenu",
-            "label": "Branch Menu",
-            "defaultValue": false
-          },
-          {
-            "type": "buttonConfiguration",
-            "key": "branchMenuItems",
-            "label": "Branch Menu Items",
-            "dependsOn": "branchMenu",
-            "wide": true,
-            "nested": true
           }
         ]
       },
@@ -245,28 +186,35 @@
           },
           {
             "type": "boolean",
-            "key": "showRelationships",
-            "label": "List Rel/s",
-            "dependsOn": { "setting": "groupBy", "value": true, "invert": true }
+            "key": "nodeSelection",
+            "label": "Node Selection"
           },
           {
-            "type": "multifield",
-            "key": "linkFields",
-            "label": "Link Columns",
-            "resetOn": ["datasource", "showRelationships"],
-            "dependsOn": "showRelationships"
+            "type": "boolean",
+            "key": "checkboxes",
+            "label": "Checkboxes",
+            "dependsOn": "nodeSelection"
           },
           {
-            "type": "select",
+            "type": "number",
+            "key": "maxNodeSelection",
+            "label": "Max Selected",
+            "dependsOn": "nodeSelection",
+            "min": 1,
+            "defaultValue": 1
+          },
+          {
+            "type": "text",
+            "key": "selectedIds",
+            "label": "Selected IDs",
+            "placeholder": "Comma seperated list",
+            "dependsOn": "nodeSelection"
+          },
+          {
+            "type": "boolean",
             "key": "nodeMenu",
             "label": "Node Menu",
-            "defaultValue": false,
-            "options": [
-              { "label": "Disabled", "value": false },
-              { "label": "Same as Branch", "value": "branch" },
-              { "label": "Extend Branch Menu", "value": "branchExtend" },
-              { "label": "Separate", "value": true }
-            ]
+            "defaultValue": false
           },
           {
             "type": "number",
@@ -279,10 +227,34 @@
           {
             "type": "buttonConfiguration",
             "key": "nodeMenuItems",
-            "label": "Menu Items",
             "dependsOn": { "setting": "nodeMenu", "value": true },
             "wide": true,
             "nested": true
+          }
+        ]
+      },
+      {
+        "section": true,
+        "name": "Relationship Settings",
+        "dependsOn": "showRelationships",
+        "settings": [
+          {
+            "type": "multifield",
+            "key": "linkFields",
+            "label": "Columns",
+            "resetOn": ["datasource", "showRelationships"],
+            "dependsOn": "showRelationships"
+          },
+          {
+            "type": "boolean",
+            "key": "linksSelectable",
+            "label": "Selectable",
+            "defaultValue": false
+          },
+          {
+            "type": "buttonConfiguration",
+            "key": "linkMenuItems",
+            "wide": true
           }
         ]
       },
@@ -306,15 +278,36 @@
           },
           {
             "type": "boolean",
-            "key": "groupNodeIcons",
-            "label": "Group Icons"
+            "key": "groupSelectable",
+            "label": "Selectable",
+            "defaultValue": false
           },
           {
-            "type": "icon",
-            "key": "groupNodeIcon",
-            "dependsOn": "groupNodeIcons",
-            "resetOn": "groupNodeIcons",
-            "label": "Group Node Icon"
+            "type": "boolean",
+            "key": "groupSelectChildren",
+            "label": "Select Children",
+            "dependsOn": "groupSelectable",
+            "defaultValue": false
+          },
+          {
+            "type": "boolean",
+            "key": "groupMenu",
+            "label": "Group Menu",
+            "defaultValue": false
+          },
+          {
+            "type": "number",
+            "key": "groupShowButtons",
+            "label": "Show Buttons",
+            "min": 0,
+            "defaultValue": 0,
+            "dependsOn": "groupMenu"
+          },
+          {
+            "type": "buttonConfiguration",
+            "key": "groupMenuItems",
+            "dependsOn": "groupMenu",
+            "wide": true
           }
         ]
       },
@@ -351,7 +344,60 @@
           },
           {
             "type": "event",
-            "key": "onLinkNodeClick",
+            "dependsOn": "groupSelectable",
+            "key": "onGroupSelect",
+            "label": "On Group Select",
+            "context": [
+              {
+                "label": "Node Value",
+                "key": "id"
+              },
+              {
+                "label": "Node Label",
+                "key": "label"
+              }
+            ]
+          },
+          {
+            "type": "event",
+            "key": "onGroupClick",
+            "dependsOn": { "setting": "treeType", "value": "groupBy" },
+            "label": "On Group Click",
+            "context": [
+              {
+                "label": "Node Value",
+                "key": "id"
+              },
+              {
+                "label": "Node Label",
+                "key": "label"
+              }
+            ]
+          },
+          {
+            "type": "event",
+            "key": "onLinkSelect",
+            "label": "On Link Select",
+            "dependsOn": "linksSelectable",
+            "context": [
+              {
+                "label": "Node Row",
+                "key": "row"
+              },
+              {
+                "label": "Node ID",
+                "key": "id"
+              },
+              {
+                "label": "Node Label",
+                "key": "label"
+              }
+            ]
+          },
+          {
+            "type": "event",
+            "key": "onLinkClick",
+            "dependsOn": "showRelationships",
             "label": "On Link Click",
             "context": [
               {
@@ -376,47 +422,20 @@
         "name": "Tree Settings",
         "settings": [
           {
+            "type": "select",
+            "key": "controlType",
+            "label": "Control Type",
+            "defaultValue": "tree",
+            "options": [
+              { "label": "Tree View", "value": "tree" },
+              { "label": "List View", "value": "list" },
+              { "label": "Accordion", "value": "accordion" }
+            ]
+          },
+          {
             "type": "boolean",
             "key": "quiet",
             "label": "Quiet"
-          },
-          {
-            "type": "boolean",
-            "key": "rootIcons",
-            "label": "Root Icon"
-          },
-          {
-            "type": "icon",
-            "key": "rootIcon",
-            "label": "Root Node Icon",
-            "dependsOn": "rootIcons",
-            "resetOn": "rootIcons"
-          },
-          {
-            "type": "boolean",
-            "key": "nodeIcons",
-            "label": "Node Icons"
-          },
-          {
-            "type": "icon",
-            "key": "nodeIcon",
-            "label": "Node Icon",
-            "dependsOn": "nodeIcons",
-            "resetOn": "nodeIcons"
-          },
-          {
-            "type": "icon",
-            "key": "menuIcon",
-            "label": "Menu Icon",
-            "defaultValue": "ri-more-fill",
-            "dependsOn": "actionMenu"
-          },
-          {
-            "type": "icon",
-            "key": "branchMenuIcon",
-            "label": "Branch Menu Icon",
-            "defaultValue": "ri-more-fill",
-            "dependsOn": "branchMenu"
           },
           {
             "type": "icon",
@@ -424,6 +443,55 @@
             "label": "Menu Menu Icon",
             "defaultValue": "ri-more-fill",
             "dependsOn": "nodeMenu"
+          }
+        ]
+      },
+      {
+        "section": true,
+        "tag": "style",
+        "name": "Node Settings",
+        "settings": [
+          {
+            "type": "icon",
+            "key": "nodeIcon",
+            "label": "Node Icon"
+          },
+          {
+            "type": "text",
+            "key": "nodeColorTemplate",
+            "label": "Text Color",
+            "placeholder": "{{ value }}"
+          },
+          {
+            "type": "text",
+            "key": "nodeBackgroundTemplate",
+            "label": "Background",
+            "placeholder": "{{ value }}"
+          }
+        ]
+      },
+      {
+        "section": true,
+        "tag": "style",
+        "name": "Group Settings",
+        "dependsOn": { "setting": "treeType", "value": "groupBy" },
+        "settings": [
+          {
+            "type": "icon",
+            "key": "groupNodeIcon",
+            "label": "Icon"
+          },
+          {
+            "type": "text",
+            "key": "groupFGColor",
+            "label": "Text Color",
+            "placeholder": "{{ value }}"
+          },
+          {
+            "type": "text",
+            "key": "groupBGColor",
+            "label": "Background",
+            "placeholder": "{{ value }}"
           }
         ]
       }

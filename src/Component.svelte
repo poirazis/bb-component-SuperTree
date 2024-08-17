@@ -1,13 +1,9 @@
 <script>
+  import TreeHeader from "../lib/TreeHeader.svelte";
   import { getContext, setContext } from "svelte";
   import { writable } from "svelte/store";
 
   import Tree from "../lib/Tree.svelte";
-  import Skeleton from "./Skeleton.svelte";
-  import CellString from "../../bb_super_components_shared/src/lib/SuperTableCells/CellString.svelte";
-  import SuperPopover from "../../bb_super_components_shared/src/lib/SuperPopover/SuperPopover.svelte";
-  import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
-
   const {
     styleable,
     ActionTypes,
@@ -19,15 +15,13 @@
     API,
     builderStore,
     notificationStore,
-    enrichButtonActions,
   } = getContext("sdk");
 
   const component = getContext("component");
-  const fullContext = getContext("context");
 
   export let branchName;
-  export let treeType = "list";
-
+  export let controlType = "tree";
+  export let treeType = "flat";
   export let collapsed;
   export let quiet;
 
@@ -36,21 +30,24 @@
   export let rootless;
 
   export let header;
-  export let headerText = "New Super Tree";
+  export let headerText;
   export let actionMenu;
   export let showButtons;
   export let menuIcon = "ri-more-fill";
-  export let menuItems;
+  export let menuItems = [];
   export let rootIcon;
 
   export let nodeIcon;
   export let nodeMenu;
   export let nodeMenuIcon = "ri-more-fill";
   export let nodeShowButtons;
-  export let nodeMenuItems;
+  export let nodeMenuItems = [];
   export let groupNodeIcon;
 
   export let groupNodeLabel;
+  export let groupSelectable;
+  export let groupMenuItems = [];
+  export let groupShowButtons = 0;
   export let nodeSelection;
   export let checkboxes;
   export let selectableBranches;
@@ -63,11 +60,12 @@
   export let limit;
   export let paginate;
 
-  export let idColumn;
+  export let idColumn = "_id";
   export let labelColumn;
   export let labelTemplate;
 
   export let joinField;
+  export let listjoinField;
   export let groupField;
   export let linkFields;
 
@@ -75,8 +73,22 @@
   export let onNodeSelect;
   export let onNodeClick;
 
+  // Use Stores for non Primitive Data types to avoid unecessary refreshes
   const dataSourceStore = memo(datasource);
+  $: dataSourceStore.set(datasource);
+
   const treeOptions = memo({});
+  const headerMenuItemsStore = memo(menuItems);
+  $: headerMenuItemsStore.set(menuItems);
+
+  const nodeMenuItemsStore = memo(nodeMenuItems);
+  $: nodeMenuItemsStore.set(nodeMenuItems);
+
+  const groupMenuItemsStore = memo(groupMenuItems);
+  $: groupMenuItemsStore.set(groupMenuItems);
+
+  const linkFieldsStore = memo(linkFields);
+  $: linkFieldsStore.set(linkFields);
 
   let groupByValues = new Set();
   let rootNodes = [];
@@ -85,44 +97,44 @@
   let query = {};
   let defaultQuery;
   let searchFilter;
-  let hover;
-  let inEdit = false;
-  let openMenu = false;
-  let menuAnchor;
+  let buildingTree = true;
 
   $: headerButtons =
-    showButtons < menuItems?.length
-      ? menuItems.slice(0, showButtons)
-      : menuItems;
+    showButtons < $headerMenuItemsStore?.length
+      ? $headerMenuItemsStore.slice(0, showButtons)
+      : $headerMenuItemsStore;
 
   $: headerMenuItems =
-    showButtons < menuItems?.length
-      ? menuItems.slice(showButtons, menuItems.length)
+    showButtons <= $headerMenuItemsStore?.length
+      ? $headerMenuItemsStore.slice(showButtons, $headerMenuItemsStore.length)
       : [];
 
   $: nodeButtons =
-    nodeShowButtons < nodeMenuItems?.length
-      ? nodeMenuItems.slice(0, nodeShowButtons)
-      : nodeMenuItems;
+    nodeShowButtons < $nodeMenuItemsStore?.length
+      ? $nodeMenuItemsStore.slice(0, nodeShowButtons)
+      : $nodeMenuItemsStore;
 
   $: nodeMenuDropItems =
-    nodeShowButtons < nodeMenuItems?.length
-      ? nodeMenuItems.slice(nodeShowButtons, nodeMenuItems.length)
+    nodeShowButtons <= $nodeMenuItemsStore?.length
+      ? $nodeMenuItemsStore.slice(nodeShowButtons, $nodeMenuItemsStore.length)
       : [];
 
-  $: dataSourceStore.set(datasource);
+  $: groupButtons =
+    groupShowButtons < $groupMenuItemsStore?.length
+      ? $groupMenuItemsStore.slice(0, groupShowButtons)
+      : $groupMenuItemsStore;
+
+  $: groupMenuDropItems =
+    groupShowButtons < $groupMenuItemsStore?.length
+      ? $groupMenuItemsStore.slice(
+          groupShowButtons,
+          $groupMenuItemsStore.length
+        )
+      : [];
+
   $: defaultQuery = QueryUtils.buildQuery(filter);
   $: queryExtension = QueryUtils.buildQuery(searchFilter);
   $: query = extendQuery(defaultQuery, [queryExtension]);
-  $: if (
-    $builderStore.inBuilder &&
-    $component.selected &&
-    !joinField &&
-    auto_join_field
-  ) {
-    builderStore.actions.updateProp("joinField", auto_join_field);
-    builderStore.actions.updateProp("treeType", "recursive");
-  }
 
   // Fetch data and refresh when needed
   $: fetch = createFetch($dataSourceStore);
@@ -134,18 +146,22 @@
     paginate,
   });
 
-  $: parseJoinField($fetch?.rows, joinField, treeType);
+  $: parseJoinField($fetch?.rows, joinField, recursive);
 
   $: definition = $fetch?.definition;
-  $: auto_join_field = detectJoinField(definition);
+  $: recursive = treeType == "recursive" && joinField;
+
   $: primaryDisplay = definition?.primaryDisplay;
-  $: buildTree(
+  $: buildTreeAsync(
     $fetch?.rows,
     treeType,
     labelColumn,
     joinField,
     groupField,
-    groupNodeLabel
+    groupNodeLabel,
+    recursive,
+    $linkFieldsStore,
+    $dataSourceStore
   );
 
   $: actions = [
@@ -158,7 +174,10 @@
   $: treeOptions.set({
     nodeIcon,
     nodeSelection,
-    selectableBranches,
+    groupSelectable,
+    groupMenuItems,
+    groupButtons,
+    groupMenuDropItems,
     selectedNodes,
     menuStore,
     checkboxes,
@@ -169,17 +188,9 @@
     nodeMenuDropItems,
   });
 
-  $: cellOptions = {
-    placeholder: "Search...",
-    disabled,
-    padding: "0.5rem",
-    debounce: 200,
-    clearValueIcon: true,
-    role: "inlineInput",
-  };
-
-  $: menuId = $menuStore;
-  $: menuRow = menuId ? $fetch.rows.find((e) => e._id == menuId) : {};
+  $: list = controlType == "list";
+  $: accordion = controlType == "accordion";
+  $: menuRow = $menuStore ? $fetch.rows.find((e) => e._id == $menuStore) : {};
 
   $: context = {
     selected: $selectedNodes,
@@ -215,19 +226,21 @@
   };
 
   // Initialize Tree Structure
-  const buildTree = (rows, filter) => {
+  const buildTree = async (rows, filter) => {
     let nodes = [];
     groupByValues.clear();
     rootNodes = [];
 
-    if (treeType == "groupBy") {
+    if (treeType == "groupBy" && groupField) {
       rows.map((row) => {
         groupByValues.add(row[groupField]);
       });
+      groupByValues = new Set(Array.from(groupByValues).sort());
       nodes = [...groupByValues];
       rootNodes = nodes.map((x, idx) => {
         return {
-          type: "group",
+          type: "branch",
+          selectable: groupSelectable,
           renderSlot: false,
           hasSlot: $component.children,
           id: x,
@@ -239,7 +252,7 @@
           children: getGroupChildNodes(x),
         };
       });
-    } else if (treeType == "recursive") {
+    } else if (recursive) {
       rows
         .filter((x) => !x[joinField])
         .map((row, idx, arr) => {
@@ -250,7 +263,9 @@
               renderSlot: true,
               hasSlot: $component.children,
               open: $builderStore.inBuilder && $component.children && idx == 0,
-              label: row[primaryDisplay],
+              label: labelTemplate
+                ? processStringSync(labelTemplate, { Row: row })
+                : row[primaryDisplay],
               children: getChildNodes(row, rows),
             },
           ];
@@ -264,12 +279,19 @@
             renderSlot: true,
             hasSlot: $component.children,
             open: $builderStore.inBuilder && $component.children && idx == 0,
-            label: row[primaryDisplay],
+            label: labelTemplate
+              ? processStringSync(labelTemplate, { Row: row })
+              : row[primaryDisplay],
             children: getChildNodes(row),
           },
         ];
       });
     }
+    buildingTree = false;
+  };
+
+  const buildTreeAsync = async (rows) => {
+    await buildTree(rows);
   };
 
   const getGroupChildNodes = (groupValue) => {
@@ -293,11 +315,12 @@
 
     if (linkFields?.length) {
       linkFields.forEach((element) => {
-        if (validLinkField(element))
+        if (validLinkField(element) && row[element])
           children.push({
-            type: "link",
+            type: "branch",
             renderSlot: false,
             label: element,
+            icon: "ri-links-line",
             quiet,
             nodeSelection: nodeSelection,
             selectedNodes: selectedNodes,
@@ -314,7 +337,7 @@
       });
     }
 
-    if (treeType == "recursive" && joinField) {
+    if (recursive) {
       rows
         .filter((x) => x[joinField]?._id == row[idColumn])
         .forEach((node) => {
@@ -375,21 +398,12 @@
       searchFilter = [];
     }
   };
-
-  const handleMenu = (e) => {
-    openMenu = !openMenu;
-  };
-
-  const parseJoinField = (rows, field) => {
-    if (treeType == "recursive" && field && rows?.length)
+  const parseJoinField = (rows, field, recursive) => {
+    if (recursive && field && rows?.length)
       rows
         .filter((x) => x[field])
         .filter((x) => typeof x[field] == "string")
         .map((row) => (row[field] = safeParse(row[field])));
-  };
-
-  const detectJoinField = (schema) => {
-    return Object.keys(schema?.schema || {}).find((e) => e.endsWith("_self_"));
   };
 
   const safeParse = (str) => {
@@ -405,80 +419,23 @@
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-click-events-have-key-events -->
-<div use:styleable={$component.styles}>
+<div class="super-tree" use:styleable={$component.styles}>
   <Provider {actions} data={context}>
     {#if header}
-      <div
-        class="searchHeader"
-        style:border-bottom={inEdit
-          ? "1px solid var(--spectrum-global-color-blue-400)"
-          : hover
-            ? "2px solid var(--spectrum-global-color-gray-200)"
-            : "2px solid transparent"}
-      >
-        {#if (searchable && hover && !disabled) || searchFilter?.length || inEdit}
-          <div
-            on:mouseleave={() => (hover = false)}
-            style:display={"flex"}
-            style:justify-content={"stretch"}
-            style:flex={"auto"}
-          >
-            <CellString
-              {cellOptions}
-              on:change={handleSearch}
-              on:enteredit={() => (inEdit = true)}
-              on:exitedit={() => (inEdit = searchFilter?.length)}
-            />
-          </div>
-        {:else}
-          <div
-            class="title"
-            on:mouseenter={() => (hover = searchable)}
-            on:mouseleave={() => (hover = false)}
-          >
-            {#if searchable}
-              <i
-                class="ri-search-line"
-                style="font-size: 12px; color: var(--spectrum-global-color-gray-500)"
-              />
-            {/if}
-            {headerText || datasource?.label}
-          </div>
-        {/if}
-
-        {#if actionMenu && menuItems?.length}
-          <div>
-            {#each headerButtons as { text, icon, disabled, onClick, quiet }}
-              <SuperButton
-                size="M"
-                {icon}
-                {disabled}
-                {quiet}
-                onClick={enrichButtonActions(onClick, $fullContext)}
-                {text}
-              />
-            {/each}
-
-            {#if headerMenuItems.length}
-              <SuperButton
-                bind:anchor={menuAnchor}
-                size="M"
-                icon={menuIcon}
-                quiet
-                selected={openMenu}
-                onClick={handleMenu}
-                text=""
-              />
-            {/if}
-          </div>
-        {/if}
-      </div>
+      <TreeHeader
+        headerText={headerText || datasource?.label}
+        {headerButtons}
+        {headerMenuItems}
+        headerMenuIcon={menuIcon}
+        {quiet}
+        {list}
+        {searchable}
+        on:search={handleSearch}
+      />
     {/if}
 
     {#if $fetch?.loading && !$fetch?.loaded}
-      <div style="height: 2rem;">
-        <Skeleton></Skeleton>
-      </div>
+      <div style="height: 2rem;"></div>
     {:else}
       <ul
         class="spectrum-TreeView"
@@ -489,9 +446,11 @@
       >
         {#if rootNodes.length}
           {#if rootless}
-            {#each [...rootNodes] as { id, icon, label, renderSlot, children, open }, idx}
+            {#each [...rootNodes] as { id, icon, label, renderSlot, children, open, type, selectable }, idx}
               <Tree
                 {id}
+                {type}
+                {selectable}
                 {icon}
                 {disabled}
                 hasSlot={$component.children}
@@ -502,6 +461,9 @@
                 on:nodeSelect={handleNodeSelect}
                 on:nodeClick={handleNodeClick}
                 {quiet}
+                {list}
+                {accordion}
+                flat={!recursive}
               >
                 <slot />
               </Tree>
@@ -519,6 +481,9 @@
               children={rootNodes}
               open={!rootless && !collapsed}
               {quiet}
+              {list}
+              {accordion}
+              flat={!recursive}
               on:nodeSelect={handleNodeSelect}
               on:nodeClick={handleNodeClick}
             >
@@ -527,78 +492,25 @@
           {/if}
         {:else}
           <li class="spectrum-TreeView-item">
-            <p class="spectrum-TreeView-itemLink">No Records Found</p>
+            <!-- svelte-ignore a11y-invalid-attribute -->
+            <a href="" class="spectrum-TreeView-itemLink">No Records Found</a>
           </li>
         {/if}
       </ul>
     {/if}
     <!-- Header Action Menu Popover -->
-    <SuperPopover
-      open={openMenu}
-      anchor={menuAnchor}
-      on:close={() => (openMenu = false)}
-    >
-      {#if headerMenuItems?.length}
-        <div
-          class="actionMenu"
-          on:click={(e) => {
-            openMenu = false;
-          }}
-        >
-          {#each headerMenuItems as { text, icon, disabled, onClick, quiet }}
-            <SuperButton
-              size="M"
-              {icon}
-              {disabled}
-              quiet
-              menuItem={true}
-              menuAlign="right"
-              onClick={enrichButtonActions(onClick, $fullContext)}
-              {text}
-            />
-          {/each}
-        </div>
-      {/if}
-    </SuperPopover>
   </Provider>
 </div>
 
 <style>
-  .spectrum-TreeView {
-    flex: 1 1 auto;
-    margin: unset;
-    overflow-y: auto;
-  }
-
-  .searchHeader {
-    width: 100%;
-    height: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    transition: all 130ms;
-  }
-
-  .actionMenu {
-    min-width: 120px;
+  .super-tree {
+    min-width: 220px;
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    overflow-y: auto;
   }
-
-  .title {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.72px;
-    text-transform: uppercase;
-    color: var(--spectrum-global-color-gray-700);
-    transition: all 230ms;
-    padding-left: 0.35rem;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    overflow-x: hidden;
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
+  .spectrum-TreeView {
+    margin: unset;
   }
 </style>
