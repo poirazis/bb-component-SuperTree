@@ -151,22 +151,22 @@
           },
           {
             "type": "boolean",
-            "key": "actionMenu",
+            "key": "headerMenu",
             "label": "Header Menu",
             "defaultValue": false
           },
           {
             "type": "number",
-            "key": "showButtons",
+            "key": "headerShowButtons",
             "label": "Show Buttons",
             "min": 0,
             "defaultValue": 0,
-            "dependsOn": "actionMenu"
+            "dependsOn": "headerMenu"
           },
           {
             "type": "buttonConfiguration",
-            "key": "menuItems",
-            "dependsOn": "actionMenu",
+            "key": "headerMenuItems",
+            "dependsOn": "headerMenu",
             "nested": true,
             "wide": true
           }

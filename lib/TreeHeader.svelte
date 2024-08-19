@@ -14,10 +14,9 @@
   export let searchable;
   export let disabled;
   export let headerText;
-  export let headerMenuItems;
+  export let headerDropMenuItems;
   export let headerButtons;
-  export let headerMenuIcon = "ri-more-fill";
-  export let list;
+  export let headerMenuIcon;
 
   let inEdit;
   let hover;
@@ -35,7 +34,7 @@
     role: "inlineInput",
   };
 
-  $: enrichButtons(headerMenuItems, $context);
+  $: enrichButtons(headerDropMenuItems, $context);
   const enrichButtons = (buttons) => {
     buttons?.forEach((btn) => {
       btn.enrichedOnClick = enrichButtonActions(btn.onClick, $context);
@@ -55,7 +54,7 @@
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div
   class="searchHeader"
-  class:list
+  class:list={!quiet}
   class:quiet
   class:inEdit
   on:mouseleave={() => (hover = false)}
@@ -76,7 +75,7 @@
     </div>
   {/if}
 
-  {#if (headerMenuItems?.length || headerButtons?.length) && !inEdit}
+  {#if (headerDropMenuItems?.length || headerButtons?.length) && !inEdit}
     <div class="action-buttons">
       {#each headerButtons as { text, icon, size, disabled, onClick, quiet }}
         <SuperButton
@@ -89,10 +88,10 @@
         />
       {/each}
 
-      {#if headerMenuItems?.length}
+      {#if headerDropMenuItems?.length}
         <SuperButton
           bind:anchor={menuAnchor}
-          size="S"
+          size="XS"
           icon={headerMenuIcon}
           quiet
           selected={openMenu}
@@ -104,29 +103,26 @@
           anchor={menuAnchor}
           on:close={() => (openMenu = false)}
         >
-          <!-- svelte-ignore a11y-no-static-element-interactions -->
-          {#if headerMenuItems?.length}
-            <!-- svelte-ignore a11y-click-events-have-key-events -->
-            <div
-              class="actionMenu"
-              on:click|preventDefault={(e) => {
-                openMenu = false;
-              }}
-            >
-              {#each headerMenuItems as { text, icon, disabled, enrichedOnClick, quiet }}
-                <SuperButton
-                  size="M"
-                  {icon}
-                  {disabled}
-                  quiet
-                  menuItem={true}
-                  menuAlign="right"
-                  onClick={enrichedOnClick}
-                  {text}
-                />
-              {/each}
-            </div>
-          {/if}
+          <!-- svelte-ignore a11y-click-events-have-key-events -->
+          <div
+            class="actionMenu"
+            on:click|preventDefault={(e) => {
+              openMenu = false;
+            }}
+          >
+            {#each headerDropMenuItems as { text, icon, disabled, enrichedOnClick, quiet }}
+              <SuperButton
+                size="M"
+                {icon}
+                {disabled}
+                quiet
+                menuItem={true}
+                menuAlign="right"
+                onClick={enrichedOnClick}
+                {text}
+              />
+            {/each}
+          </div>
         </SuperPopover>
       {/if}
     </div>

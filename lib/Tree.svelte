@@ -17,7 +17,6 @@
   export let id;
   export let disabled;
   export let list;
-  export let flat;
   export let type;
   export let icon;
   export let accordion;
@@ -34,20 +33,33 @@
 
   $: if (disabled) open = false;
   $: branch = type == "branch";
+  $: linkBranch = type == "linkBranch";
+  $: linkItem = type == "linkItem";
 
   $: selectionStore = $treeOptions.selectedNodes;
   $: menuStore = $treeOptions.menuStore;
   $: selected = $selectionStore.findIndex((x) => x.id == id) > -1;
 
-  $: hasButtons = branch
-    ? $treeOptions?.groupButtons.length
-    : $treeOptions?.nodeButtons.length;
+  $: hasChildren = children?.length;
+  $: hasCheboxes = $treeOptions.checkboxes || (accordion && selectable);
 
-  $: buttons = branch ? $treeOptions.groupButtons : $treeOptions.nodeButtons;
+  $: hasButtons = branch
+    ? $treeOptions?.groupButtons?.length
+    : $treeOptions?.nodeButtons?.length;
+
+  $: buttons = branch
+    ? $treeOptions.groupButtons
+    : $treeOptions.nodeMenu
+      ? $treeOptions.nodeButtons
+      : false;
 
   $: hasDropMenu = branch
     ? $treeOptions.groupMenuItems?.length
-    : $treeOptions.nodeMenuDropItems?.length;
+    : linkItem
+      ? $treeOptions.linkMenuItems?.length
+      : linkBranch
+        ? false
+        : $treeOptions.nodeMenuDropItems?.length;
 
   $: dropMenuItems = branch
     ? $treeOptions.groupMenuDropItems
@@ -75,6 +87,7 @@
 
   const handleSelect = (e) => {
     if (selectable) {
+      e.stopPropagation();
       dispatch("nodeSelect", { id, label });
       return;
     }
@@ -96,31 +109,25 @@
   <a
     class="spectrum-TreeView-itemLink"
     class:list={list || accordion}
-    class:branch={type == "branch"}
-    style:padding-left={(children?.length && !accordion) ||
-    hasButtons ||
-    hasDropMenu
-      ? "0.25rem"
-      : flat || (accordion && !hasButtons)
-        ? "0.65rem"
-        : hasButtons && !accordion
+    style:padding-left={accordion
+      ? hasButtons || hasCheboxes
+        ? "0rem"
+        : "0.5rem"
+      : hasChildren
+        ? "0.25rem"
+        : hasButtons
           ? "1.25rem"
           : "1.5rem"}
     on:mouseenter={() => (hover = true)}
     on:mouseleave={() => (hover = false)}
-    on:click|self|stopPropagation={accordion ? handleClick : handleSelect}
+    on:mousedown|self|preventDefault={handleClick}
   >
-    <div
-      class="left-contents"
-      class:has-buttons={hasButtons}
-      on:mousedown={() => ($menuStore = id)}
-    >
-      {#if children?.length && !accordion}
+    <div class="left-contents" class:has-buttons={hasButtons}>
+      {#if hasChildren && !accordion}
         <i
           class="ri-arrow-right-s-line chevron"
           class:open
-          class:childless={children?.length < 1}
-          on:click|self|stopPropagation={handleClick}
+          on:click={handleClick}
         >
         </i>
       {/if}
@@ -128,8 +135,8 @@
       {#if hasDropMenu && accordion}
         <SuperButton
           bind:anchor={menuAnchor}
-          size="S"
-          icon={$treeOptions.nodeMenuIcon}
+          size="XS"
+          icon={$treeOptions.nodeMenuIcon ?? "ri-more-2-fill"}
           fillOnHover
           quiet
           selected={$menuStore == id}
@@ -140,8 +147,7 @@
           text=""
         />
       {/if}
-
-      {#if $treeOptions?.checkboxes && selectable}
+      {#if hasCheboxes}
         {#if selected}
           <i
             on:click|preventDefault|stopPropagation={handleSelect}
@@ -170,15 +176,23 @@
       {#if icon}
         <i class={icon} class:icon />
       {/if}
-      {label || "Not Set"}
+      <div
+        class="label"
+        class:selectable
+        class:branch={type == "linkBranch"}
+        style="z-index: 1;"
+        on:mousedown={selectable ? handleSelect : handleClick}
+      >
+        {label || "Not Set"}
+      </div>
     </div>
 
     <!-- The Node Action Menu  -->
     {#if hasDropMenu && (hover || openMenu) && !disabled && !accordion}
       <SuperButton
         bind:anchor={menuAnchor}
-        size="S"
-        icon={$treeOptions.nodeMenuIcon}
+        size="XS"
+        icon="ri-more-fill"
         fillOnHover
         quiet
         selected={$menuStore == id}
@@ -190,14 +204,8 @@
       />
     {/if}
 
-    {#if children?.length && accordion}
-      <i
-        class="ri-arrow-right-s-line chevron"
-        class:open
-        class:childless={children?.length < 1}
-        on:click|self|stopPropagation={handleClick}
-      >
-      </i>
+    {#if hasChildren && accordion}
+      <i class="ri-arrow-right-s-line chevron accordion" class:open> </i>
     {/if}
   </a>
 
@@ -219,6 +227,7 @@
           type={node.type}
           icon={node.icon}
           {list}
+          {accordion}
           on:nodeSelect
           on:nodeClick
         >
@@ -233,6 +242,7 @@
     {/if}
   {/if}
 </li>
+
 {#if hasDropMenu && openMenu}
   <SuperPopover
     open={openMenu}
@@ -272,17 +282,10 @@
   .spectrum-TreeView-item {
     transition: all 130ms;
     text-decoration: none !important;
+    border: unset;
   }
   .spectrum-TreeView-item.is-selected {
     background-color: var(--spectrum-global-color-gray-100) !important;
-  }
-  .spectrum-TreeView-itemLink:hover {
-    transition: all 130ms;
-    background-color: var(--spectrum-global-color-gray-75) !important;
-  }
-  .spectrum-TreeView-itemLink.branch {
-    transition: all 130ms;
-    font-weight: 600;
   }
   .is-menu-open {
     background-color: var(--spectrum-global-color-gray-100);
@@ -290,7 +293,6 @@
   }
   .spectrum-TreeView-item.list {
     transition: all 130ms;
-    border-bottom: 1px solid var(--spectrum-global-color-gray-200);
   }
   .spectrum-TreeView-itemLink {
     width: 100%;
@@ -302,25 +304,39 @@
     width: 100%;
     display: flex;
     justify-content: space-between;
-    padding-right: 0.25rem;
+    padding-right: 0.35rem;
+    border-bottom: 1px solid var(--spectrum-global-color-gray-200);
+  }
+
+  .spectrum-TreeView-itemLink:hover {
+    transition: all 130ms;
+    background-color: var(--spectrum-global-color-gray-75) !important;
+  }
+  .branch {
+    transition: all 130ms;
+    font-weight: 600;
+    color: var(--spectrum-global-color-gray-600) !important;
   }
   .icon {
     font-size: 14px;
     color: var(--spectrum-global-color-gray-600);
-    z-index: 1;
   }
   .checkbox {
     font-size: 16px;
     color: var(--spectrum-global-color-gray-600);
     z-index: 1;
+    margin-right: 4px;
   }
   .chevron {
     transition: all 130ms;
     font-size: 16px;
     color: var(--spectrum-global-color-gray-500);
-    z-index: 2;
   }
 
+  .chevron.accordion {
+    color: var(--spectrum-global-color-gray-600);
+    font-size: 18px;
+  }
   .chevron.open {
     transform: rotate(90deg);
     color: var(--spectrum-global-color-gray-800);
@@ -340,5 +356,10 @@
   }
   .left-contents.has-buttons {
     gap: 0rem;
+    padding-left: 0.25rem;
+  }
+
+  .label.selectable:hover {
+    cursor: pointer;
   }
 </style>

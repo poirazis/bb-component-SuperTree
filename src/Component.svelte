@@ -31,27 +31,27 @@
 
   export let header;
   export let headerText;
-  export let actionMenu;
-  export let showButtons;
-  export let menuIcon = "ri-more-fill";
-  export let menuItems = [];
-  export let rootIcon;
+  export let headerMenu;
+  export let headerMenuItems;
+  export let headerShowButtons;
+  export let headerMenuIcon = "ri-more-2-fill";
 
   export let nodeIcon;
   export let nodeMenu;
   export let nodeMenuIcon = "ri-more-fill";
   export let nodeShowButtons;
   export let nodeMenuItems = [];
-  export let groupNodeIcon;
+  export let nodeSelection;
+  export let checkboxes;
+  export let maxNodeSelection;
 
+  export let groupNodeIcon;
   export let groupNodeLabel;
   export let groupSelectable;
   export let groupMenuItems = [];
   export let groupShowButtons = 0;
-  export let nodeSelection;
-  export let checkboxes;
-  export let selectableBranches;
-  export let maxNodeSelection;
+
+  export let linkMenuItems;
 
   export let datasource;
   export let filter = [];
@@ -65,7 +65,6 @@
   export let labelTemplate;
 
   export let joinField;
-  export let listjoinField;
   export let groupField;
   export let linkFields;
 
@@ -78,8 +77,8 @@
   $: dataSourceStore.set(datasource);
 
   const treeOptions = memo({});
-  const headerMenuItemsStore = memo(menuItems);
-  $: headerMenuItemsStore.set(menuItems);
+  const headerMenuItemsStore = memo(headerMenuItems);
+  $: headerMenuItemsStore.set(headerMenuItems);
 
   const nodeMenuItemsStore = memo(nodeMenuItems);
   $: nodeMenuItemsStore.set(nodeMenuItems);
@@ -99,23 +98,28 @@
   let searchFilter;
   let buildingTree = true;
 
-  $: headerButtons =
-    showButtons < $headerMenuItemsStore?.length
-      ? $headerMenuItemsStore.slice(0, showButtons)
-      : $headerMenuItemsStore;
+  $: headerButtons = headerMenu
+    ? headerShowButtons < $headerMenuItemsStore?.length
+      ? $headerMenuItemsStore.slice(0, headerShowButtons)
+      : $headerMenuItemsStore
+    : [];
 
-  $: headerMenuItems =
-    showButtons <= $headerMenuItemsStore?.length
-      ? $headerMenuItemsStore.slice(showButtons, $headerMenuItemsStore.length)
+  $: headerDropMenuItems =
+    headerMenu && headerShowButtons <= $headerMenuItemsStore?.length
+      ? $headerMenuItemsStore.slice(
+          headerShowButtons,
+          $headerMenuItemsStore.length
+        )
       : [];
 
-  $: nodeButtons =
-    nodeShowButtons < $nodeMenuItemsStore?.length
+  $: nodeButtons = nodeMenu
+    ? nodeShowButtons < $nodeMenuItemsStore?.length
       ? $nodeMenuItemsStore.slice(0, nodeShowButtons)
-      : $nodeMenuItemsStore;
+      : $nodeMenuItemsStore
+    : [];
 
   $: nodeMenuDropItems =
-    nodeShowButtons <= $nodeMenuItemsStore?.length
+    nodeMenu && nodeShowButtons <= $nodeMenuItemsStore?.length
       ? $nodeMenuItemsStore.slice(nodeShowButtons, $nodeMenuItemsStore.length)
       : [];
 
@@ -178,12 +182,12 @@
     groupMenuItems,
     groupButtons,
     groupMenuDropItems,
+    linkMenuItems,
     selectedNodes,
     menuStore,
     checkboxes,
     nodeMenu,
     nodeMenuIcon,
-    nodeMenuItems,
     nodeButtons,
     nodeMenuDropItems,
   });
@@ -291,7 +295,7 @@
   };
 
   const buildTreeAsync = async (rows) => {
-    await buildTree(rows);
+    if (rows?.length) await buildTree(rows);
   };
 
   const getGroupChildNodes = (groupValue) => {
@@ -317,10 +321,9 @@
       linkFields.forEach((element) => {
         if (validLinkField(element) && row[element])
           children.push({
-            type: "branch",
+            type: "linkBranch",
             renderSlot: false,
             label: element,
-            icon: "ri-links-line",
             quiet,
             nodeSelection: nodeSelection,
             selectedNodes: selectedNodes,
@@ -331,6 +334,7 @@
                 id: link["_id"],
                 quiet,
                 label: link.primaryDisplay,
+                type: "linkItem",
               };
             }),
           });
@@ -425,10 +429,9 @@
       <TreeHeader
         headerText={headerText || datasource?.label}
         {headerButtons}
-        {headerMenuItems}
-        headerMenuIcon={menuIcon}
+        {headerDropMenuItems}
+        {headerMenuIcon}
         {quiet}
-        {list}
         {searchable}
         on:search={handleSearch}
       />
@@ -471,7 +474,6 @@
           {:else}
             <Tree
               id={"tree-root"}
-              icon={rootIcon}
               {nodeSelection}
               {selectedNodes}
               {disabled}
