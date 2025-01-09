@@ -53,6 +53,7 @@
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div
+  bind:this={menuAnchor}
   class="searchHeader"
   class:list={!quiet}
   class:quiet
@@ -60,7 +61,6 @@
   on:mouseleave={() => (hover = false)}
 >
   {#if (searchable && hover && !disabled) || searchFilter || inEdit}
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <CellString
       {cellOptions}
       value={searchFilter}
@@ -69,7 +69,6 @@
       on:exitedit={() => (inEdit = searchFilter?.length)}
     />
   {:else}
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="title" on:mouseenter={() => (hover = searchable)}>
       {headerText}
     </div>
@@ -90,57 +89,69 @@
 
       {#if headerDropMenuItems?.length}
         <SuperButton
-          bind:anchor={menuAnchor}
-          size="XS"
+          size="S"
           icon={headerMenuIcon}
           quiet
           selected={openMenu}
-          onClick={handleMenu}
+          on:click={handleMenu}
           text=""
         />
-        <SuperPopover
-          open={openMenu}
-          anchor={menuAnchor}
-          on:close={() => (openMenu = false)}
-        >
-          <!-- svelte-ignore a11y-click-events-have-key-events -->
-          <div
-            class="actionMenu"
-            on:click|preventDefault={(e) => {
-              openMenu = false;
-            }}
-          >
-            {#each headerDropMenuItems as { text, icon, disabled, enrichedOnClick, quiet }}
-              <SuperButton
-                size="M"
-                {icon}
-                {disabled}
-                quiet
-                menuItem={true}
-                menuAlign="right"
-                onClick={enrichedOnClick}
-                {text}
-              />
-            {/each}
-          </div>
-        </SuperPopover>
       {/if}
     </div>
   {/if}
 </div>
 
+{#if headerDropMenuItems?.length}
+  <SuperPopover
+    open={openMenu}
+    anchor={menuAnchor}
+    on:close={() => (openMenu = false)}
+  >
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div
+      class="actionMenu"
+      on:click|preventDefault={(e) => {
+        openMenu = false;
+      }}
+    >
+      {#each headerDropMenuItems as { text, icon, disabled, enrichedOnClick, quiet }}
+        <SuperButton
+          size="M"
+          {icon}
+          {disabled}
+          quiet
+          menuItem={true}
+          menuAlign="right"
+          onClick={enrichedOnClick}
+          {text}
+        />
+      {/each}
+    </div>
+  </SuperPopover>
+{/if}
+
 <style>
   .searchHeader {
-    flex: none;
     width: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
     transition: all 130ms;
-    border: 4px solid transparent;
-    height: 2.2rem;
-    border-top-right-radius: 4px;
-    border-top-left-radius: 4px;
+    height: 2.4rem;
+    padding-left: 0.25rem;
+    color: var(--spectrum-global-color-gray-800);
+
+    &:hover {
+      color: var(--spectrum-global-color-gray-800);
+    }
+
+    & > i {
+      &:hover {
+        cursor: pointer;
+        color: var(--primaryColor);
+      }
+    }
   }
   .searchHeader.list {
     background-color: var(--spectrum-global-color-gray-100);
@@ -156,7 +167,7 @@
   }
   .inEdit {
     background-color: var(--spectrum-global-color-gray-50) !important;
-    border-color: var(--spectrum-global-color-gray-200);
+    border: 4px solid var(--spectrum-global-color-gray-200);
   }
   .actionMenu {
     min-width: 120px;
@@ -174,10 +185,9 @@
   .title {
     flex: auto;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 1.1px;
-    color: var(--spectrum-global-color-gray-700);
+    letter-spacing: 1.2px;
     transition: all 130ms;
     padding-left: 0.35rem;
     white-space: nowrap;
