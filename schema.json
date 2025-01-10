@@ -54,6 +54,17 @@
     "settings": [
       {
         "type": "select",
+        "key": "controlType",
+        "label": "Control Type",
+        "defaultValue": "tree",
+        "options": [
+          { "label": "Tree View", "value": "tree" },
+          { "label": "List View", "value": "list" },
+          { "label": "Accordion", "value": "accordion" }
+        ]
+      },
+      {
+        "type": "select",
         "key": "treeType",
         "label": "Tree Type",
         "defaultValue": "flat",
@@ -118,14 +129,14 @@
       },
       {
         "type": "boolean",
-        "key": "rootless",
-        "label": "Rootless",
-        "defaultValue": true
+        "key": "disabled",
+        "label": "Disabled"
       },
       {
         "type": "boolean",
-        "key": "disabled",
-        "label": "Disabled"
+        "key": "rootless",
+        "label": "Rootless",
+        "defaultValue": true
       },
       {
         "type": "boolean",
@@ -378,17 +389,6 @@
         "tag": "style",
         "name": "Tree Settings",
         "settings": [
-          {
-            "type": "select",
-            "key": "controlType",
-            "label": "Control Type",
-            "defaultValue": "tree",
-            "options": [
-              { "label": "Tree View", "value": "tree" },
-              { "label": "List View", "value": "list" },
-              { "label": "Accordion", "value": "accordion" }
-            ]
-          },
           {
             "type": "select",
             "key": "chevronPosition",

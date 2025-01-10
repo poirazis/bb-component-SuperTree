@@ -39,9 +39,12 @@
   $: if (disabled) open = false;
   $: groupBranch = type == "groupBranch";
   $: rightChevron = $treeOptions.chevronPosition == "right";
-  $: selectable = groupBranch
-    ? $treeOptions.groupSelectable
-    : $treeOptions.nodeSelection;
+  $: selectable =
+    id == "tree-root" || disabled
+      ? false
+      : groupBranch
+        ? $treeOptions.groupSelectable
+        : $treeOptions.nodeSelection;
 
   $: selectionStore = $treeOptions.selectedNodes;
   $: menuStore = $treeOptions.menuStore;
@@ -67,7 +70,7 @@
   const handleClick = (e) => {
     if (disabled) return;
 
-    if (children?.length || hasSlot || accordion) {
+    if (children?.length || renderSlot || accordion) {
       open = !open;
       return;
     }
@@ -82,7 +85,6 @@
 
   const handleSelect = (e) => {
     if (selectable) {
-      e.stopPropagation();
       dispatch("nodeSelect", { id, label, row });
       return;
     }
@@ -98,14 +100,14 @@
   class:is-disabled={disabled}
   class:is-open={open}
   class:is-menu-open={openMenu}
-  class:list
   class:accordion
   class:groupBranch
+  class:selected
   style:background-color={bgColor}
 >
   <div
     class="tree-node-item"
-    class:hasChildren={hasChildren || hasSlot}
+    class:hasChildren={hasChildren || renderSlot}
     class:hasDropMenu={hasDropMenu && rightChevron && !hasCheboxes}
     class:hasButtons
     class:hasCheckbox={hasCheboxes}
@@ -113,6 +115,7 @@
     class:accordion
     style:color
     class:selected
+    class:disabled
     style:background-color={openMenu && !selected
       ? "var(--spectrum-global-color-gray-100)"
       : bgColor}
@@ -120,8 +123,11 @@
     on:mouseleave={() => (hover = false)}
     on:mousedown|self={handleClick}
   >
-    <div class="control-content" class:flat={flat && !hasChildren && !hasSlot}>
-      {#if (hasChildren || hasSlot) && $treeOptions.chevronPosition == "left"}
+    <div
+      class="control-content"
+      class:flat={flat && !hasChildren && !renderSlot}
+    >
+      {#if (hasChildren || renderSlot) && $treeOptions.chevronPosition == "left"}
         <i
           class="ri-arrow-right-s-line chevron"
           class:open
@@ -221,10 +227,10 @@
     {/if}
   </div>
 
-  {#if (children?.length || hasSlot) && open}
+  {#if (children?.length || renderSlot) && open}
     <div
       class="tree"
-      style:display={open ? "block" : "none"}
+      style:display={open ? "flex" : "none"}
       transition:slide={{ duration: 130 }}
     >
       {#each children as node, idx}

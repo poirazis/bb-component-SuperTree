@@ -76,7 +76,7 @@
 
   {#if (headerDropMenuItems?.length || headerButtons?.length) && !inEdit}
     <div class="action-buttons">
-      {#each headerButtons as { text, icon, size, disabled, onClick, quiet }}
+      {#each headerButtons as { text, icon, size, disabled, onClick, quiet, type }}
         <SuperButton
           {size}
           {icon}
@@ -84,6 +84,7 @@
           {quiet}
           onClick={enrichButtonActions(onClick, $context)}
           {text}
+          {type}
         />
       {/each}
 
@@ -140,6 +141,7 @@
     transition: all 130ms;
     height: 2.4rem;
     padding-left: 0.25rem;
+    padding-right: 0.5rem;
     color: var(--spectrum-global-color-gray-800);
 
     &:hover {
@@ -180,6 +182,7 @@
     flex: none;
     display: flex;
     align-items: center;
+    gap: 0.25rem;
   }
 
   .title {

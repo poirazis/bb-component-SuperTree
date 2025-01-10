@@ -49,7 +49,6 @@
   export let nodeSelection;
   export let nodeFGColor;
   export let nodeBGColor;
-  export let nodeSlot = true;
 
   export let checkboxes;
   export let maxNodeSelection;
@@ -303,7 +302,7 @@
         .map((row, idx, arr) => {
           rootNodes.push({
             id: row[idColumn],
-            renderSlot: nodeSlot,
+            renderSlot: hasSlot,
             icon: nodeIcon,
             row,
             open: $builderStore.inBuilder && $component.children && idx == 0,
@@ -326,7 +325,7 @@
           {
             id: row[idColumn],
             row,
-            renderSlot: nodeSlot,
+            renderSlot: hasSlot,
             open: $builderStore.inBuilder && $component.children && idx == 0,
             icon: nodeIcon,
             label: labelTemplate
@@ -356,12 +355,11 @@
       .map((row, idx) => {
         return {
           id: row[idColumn],
-          renderSlot: nodeSlot,
+          renderSlot: hasSlot,
           type: "groupItem",
           group: groupValue,
           quiet,
           row,
-          hasSlot: $component.children,
           open: $builderStore.inBuilder && $component.children && idx == 0,
           icon: nodeIcon,
           label: labelTemplate
@@ -386,7 +384,7 @@
         .filter((x) => x[joinField] == row[idColumn])
         .forEach((row) => {
           children.push({
-            renderSlot: nodeSlot,
+            renderSlot: hasSlot,
             id: row[idColumn],
             icon: nodeIcon,
             row,
@@ -519,6 +517,7 @@
     class:quiet
     class:disabled
     class:nested
+    class:list
   >
     <Provider {actions} data={context} />
     {#if header && !nested}
@@ -535,7 +534,7 @@
     {/if}
 
     {#if $fetch?.loading && !$fetch?.loaded}
-      <div class="loader" style="height: 2rem;">
+      <div class="loader" class:list>
         <div class="animation" />
       </div>
     {:else}
@@ -548,6 +547,7 @@
             {#each rootNodes as node, idx (idx)}
               <Tree
                 {...node}
+                {disabled}
                 {quiet}
                 {list}
                 {accordion}
@@ -615,7 +615,7 @@
 
         & > .tree-node-item {
           &.selected {
-            background-color: var(--spectrum-global-color-gray-300);
+            background-color: var(--spectrum-global-color-gray-200);
           }
         }
       }
@@ -632,13 +632,6 @@
       width: 100%;
       line-height: 2rem;
 
-      &.list {
-        padding: 1rem;
-      }
-      &.list:not(:last-child) {
-        padding: 1rem;
-        border-bottom: 1px solid var(--spectrum-global-color-gray-200);
-      }
       & > .tree-node-item {
         position: relative;
         display: flex;
@@ -654,11 +647,11 @@
           padding-left: 0.5rem;
         }
 
-        &.hasChildren {
+        &.hasChildren:not(.disabled) {
           cursor: pointer;
         }
 
-        &:hover:not(.selected)::before {
+        &:hover:not(.selected):not(.disabled)::before {
           position: absolute;
           left: 0px;
           top: 0px;
@@ -669,7 +662,7 @@
           z-index: 0;
         }
 
-        &:hover {
+        &:hover:not(.disabled) {
           color: var(--spectrum-global-color-gray-900);
         }
       }
@@ -677,15 +670,58 @@
       & > .tree {
         position: relative;
         margin-left: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
       }
     }
     & > .tree {
       height: 100%;
       overflow: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
     }
 
     &.disabled {
       color: var(--spectrum-global-color-gray-600);
+    }
+
+    &.list {
+      & > .tree {
+        gap: 0.5rem;
+        padding: 0.5rem;
+      }
+
+      &.nested {
+        & > .tree {
+          padding: unset;
+        }
+      }
+
+      & > * .tree-node {
+        border: 1px solid var(--spectrum-global-color-gray-300);
+        border-radius: 4px;
+
+        &:hover {
+          border-color: var(--spectrum-global-color-gray-400);
+        }
+
+        &.selected {
+          border-color: var(--spectrum-global-color-blue-500);
+        }
+
+        & > .tree-node-item {
+          padding: 0.25rem;
+          max-height: unset;
+        }
+
+        & > .tree {
+          padding: 0.5rem;
+          gap: 0.5rem;
+          margin-left: 1rem;
+        }
+      }
     }
   }
 
@@ -693,6 +729,12 @@
     display: flex;
     align-items: center;
     padding-left: 1rem;
+    height: 2rem;
+
+    &.list {
+      height: 2.6rem;
+    }
+
     & > .animation {
       height: 5px;
       aspect-ratio: 5;
