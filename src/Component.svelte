@@ -10,6 +10,7 @@
     Provider,
     fetchData,
     processStringSync,
+    enrichButtonActions,
     QueryUtils,
     memo,
     API,
@@ -18,10 +19,13 @@
   } = getContext("sdk");
 
   const component = getContext("component");
+  const parentTree = getContext("superTreeOptions");
+  const allContext = getContext("context");
 
   export let branchName;
   export let controlType = "tree";
   export let treeType = "flat";
+  export let chevronPosition = "left";
   export let collapsed;
   export let quiet;
 
@@ -35,6 +39,7 @@
   export let headerMenuItems;
   export let headerShowButtons;
   export let headerMenuIcon = "ri-more-2-fill";
+  export let collapsible;
 
   export let nodeIcon;
   export let nodeMenu;
@@ -42,16 +47,21 @@
   export let nodeShowButtons;
   export let nodeMenuItems = [];
   export let nodeSelection;
+  export let nodeFGColor;
+  export let nodeBGColor;
+
   export let checkboxes;
   export let maxNodeSelection;
 
+  export let groupMenu;
   export let groupNodeIcon;
   export let groupNodeLabel;
   export let groupSelectable;
   export let groupMenuItems = [];
   export let groupShowButtons = 0;
-
-  export let linkMenuItems;
+  export let groupFGColor;
+  export let groupBGColor;
+  export let groupSlot;
 
   export let datasource;
   export let filter = [];
@@ -66,7 +76,8 @@
 
   export let joinField;
   export let groupField;
-  export let linkFields;
+
+  export let flex;
 
   // Events
   export let onNodeSelect;
@@ -86,17 +97,19 @@
   const groupMenuItemsStore = memo(groupMenuItems);
   $: groupMenuItemsStore.set(groupMenuItems);
 
-  const linkFieldsStore = memo(linkFields);
-  $: linkFieldsStore.set(linkFields);
-
   let groupByValues = new Set();
   let rootNodes = [];
   let selectedNodes = new writable([]);
+  let selectedRows = new writable([]);
   let menuStore = new writable({});
   let query = {};
   let defaultQuery;
   let searchFilter;
   let buildingTree = true;
+
+  $: comp_id = $component.id;
+  $: nested = $component.ancestors.at(-2) == "plugin/bb-component-SuperTree";
+  $: quiet = $parentTree ? $parentTree.quiet : quiet;
 
   $: headerButtons = headerMenu
     ? headerShowButtons < $headerMenuItemsStore?.length
@@ -117,24 +130,25 @@
       ? $nodeMenuItemsStore.slice(0, nodeShowButtons)
       : $nodeMenuItemsStore
     : [];
-
   $: nodeMenuDropItems =
     nodeMenu && nodeShowButtons <= $nodeMenuItemsStore?.length
       ? $nodeMenuItemsStore.slice(nodeShowButtons, $nodeMenuItemsStore.length)
       : [];
 
-  $: groupButtons =
-    groupShowButtons < $groupMenuItemsStore?.length
+  $: groupButtons = groupMenu
+    ? groupShowButtons < $groupMenuItemsStore?.length
       ? $groupMenuItemsStore.slice(0, groupShowButtons)
-      : $groupMenuItemsStore;
+      : $groupMenuItemsStore
+    : [];
 
-  $: groupMenuDropItems =
-    groupShowButtons < $groupMenuItemsStore?.length
+  $: groupMenuDropItems = groupMenu
+    ? groupShowButtons < $groupMenuItemsStore?.length
       ? $groupMenuItemsStore.slice(
           groupShowButtons,
           $groupMenuItemsStore.length
         )
-      : [];
+      : []
+    : [];
 
   $: defaultQuery = QueryUtils.buildQuery(filter);
   $: queryExtension = QueryUtils.buildQuery(searchFilter);
@@ -150,39 +164,21 @@
     paginate,
   });
 
-  $: parseJoinField($fetch?.rows, joinField, recursive);
+  $: resetSelections(nodeSelection);
 
-  $: definition = $fetch?.definition;
-  $: recursive = treeType == "recursive" && joinField;
-
-  $: primaryDisplay = definition?.primaryDisplay;
-  $: buildTreeAsync(
-    $fetch?.rows,
-    treeType,
-    labelColumn,
-    joinField,
-    groupField,
-    groupNodeLabel,
-    recursive,
-    $linkFieldsStore,
-    $dataSourceStore
-  );
-
-  $: actions = [
-    {
-      type: ActionTypes.RefreshDatasource,
-      callback: () => fetch.refresh(),
-    },
-  ];
   // Expose the Super Tree Context fot the Child nodes and nested Trees
   $: treeOptions.set({
+    ...$$props,
+    treeType,
     nodeIcon,
     nodeSelection,
     groupSelectable,
-    groupMenuItems,
+    groupMenu,
     groupButtons,
     groupMenuDropItems,
-    linkMenuItems,
+    groupNodeIcon,
+    groupField,
+    groupNodeLabel,
     selectedNodes,
     menuStore,
     checkboxes,
@@ -190,14 +186,35 @@
     nodeMenuIcon,
     nodeButtons,
     nodeMenuDropItems,
+    chevronPosition: accordion ? "right" : chevronPosition,
+    hasSlot,
+    quiet,
   });
+
+  $: definition = $fetch?.definition;
+  $: recursive = treeType == "recursive" && joinField;
+  $: hasSlot = $component.children;
+
+  $: primaryDisplay = getPrimaryDisplay(definition);
+
+  $: buildTreeAsync($fetch?.rows, $treeOptions);
+
+  $: actions = [
+    {
+      type: ActionTypes.RefreshDatasource,
+      callback: () => fetch.refresh(),
+    },
+  ];
 
   $: list = controlType == "list";
   $: accordion = controlType == "accordion";
-  $: menuRow = $menuStore ? $fetch.rows.find((e) => e._id == $menuStore) : {};
+  $: menuRow = $menuStore
+    ? $fetch.rows.find((e) => e[idColumn] == $menuStore)
+    : {};
 
   $: context = {
-    selected: $selectedNodes,
+    selected: $selectedRows,
+    selectedIds: $selectedRows.map((x) => x[idColumn]),
     menuRow,
   };
 
@@ -226,7 +243,7 @@
         };
       });
     });
-    return extendedQuery;
+    return { ...extendedQuery, onEmptyFilter: "all" };
   };
 
   // Initialize Tree Structure
@@ -243,16 +260,39 @@
       nodes = [...groupByValues];
       rootNodes = nodes.map((x, idx) => {
         return {
-          type: "branch",
+          type: "groupBranch",
           selectable: groupSelectable,
-          renderSlot: false,
-          hasSlot: $component.children,
+          renderSlot: groupSlot,
           id: x,
           open: $builderStore.inBuilder && $component.children && idx == 0,
           icon: groupNodeIcon,
-          label: processStringSync(groupNodeLabel || "{{ value }}", {
-            value: x,
-          }),
+          label: groupNodeLabel
+            ? processStringSync(groupNodeLabel, {
+                ...$allContext,
+                [comp_id]: {
+                  ...$allContext[comp_id],
+                  group: x,
+                },
+              })
+            : x,
+          color: groupFGColor
+            ? processStringSync(groupFGColor, {
+                ...$allContext,
+                [comp_id]: {
+                  ...$allContext[comp_id],
+                  group: x,
+                },
+              })
+            : undefined,
+          bgColor: groupBGColor
+            ? processStringSync(groupBGColor, {
+                ...$allContext,
+                [comp_id]: {
+                  ...$allContext[comp_id],
+                  group: x,
+                },
+              })
+            : undefined,
           children: getGroupChildNodes(x),
         };
       });
@@ -260,19 +300,23 @@
       rows
         .filter((x) => !x[joinField])
         .map((row, idx, arr) => {
-          rootNodes = [
-            ...rootNodes,
-            {
-              id: row[idColumn],
-              renderSlot: true,
-              hasSlot: $component.children,
-              open: $builderStore.inBuilder && $component.children && idx == 0,
-              label: labelTemplate
-                ? processStringSync(labelTemplate, { Row: row })
-                : row[primaryDisplay],
-              children: getChildNodes(row, rows),
-            },
-          ];
+          rootNodes.push({
+            id: row[idColumn],
+            renderSlot: hasSlot,
+            icon: nodeIcon,
+            row,
+            open: $builderStore.inBuilder && $component.children && idx == 0,
+            label: labelTemplate
+              ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
+              : row[primaryDisplay],
+            color: nodeFGColor
+              ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
+              : undefined,
+            bgColor: nodeBGColor
+              ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
+              : undefined,
+            children: getChildNodes(row, rows),
+          });
         });
     } else {
       rows.map((row, idx) => {
@@ -280,12 +324,19 @@
           ...rootNodes,
           {
             id: row[idColumn],
-            renderSlot: true,
-            hasSlot: $component.children,
+            row,
+            renderSlot: hasSlot,
             open: $builderStore.inBuilder && $component.children && idx == 0,
+            icon: nodeIcon,
             label: labelTemplate
-              ? processStringSync(labelTemplate, { Row: row })
+              ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
               : row[primaryDisplay],
+            color: nodeFGColor
+              ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
+              : undefined,
+            bgColor: nodeBGColor
+              ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
+              : undefined,
             children: getChildNodes(row),
           },
         ];
@@ -301,15 +352,26 @@
   const getGroupChildNodes = (groupValue) => {
     return $fetch.rows
       .filter((row) => row[groupField] == groupValue)
-      .map((node, idx) => {
+      .map((row, idx) => {
         return {
-          id: node[idColumn],
-          renderSlot: true,
+          id: row[idColumn],
+          renderSlot: hasSlot,
+          type: "groupItem",
+          group: groupValue,
           quiet,
-          hasSlot: $component.children,
+          row,
           open: $builderStore.inBuilder && $component.children && idx == 0,
-          label: node[labelColumn || primaryDisplay],
-          children: getChildNodes(node),
+          icon: nodeIcon,
+          label: labelTemplate
+            ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
+            : row[primaryDisplay],
+          color: nodeFGColor
+            ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
+            : undefined,
+          bgColor: nodeBGColor
+            ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
+            : undefined,
+          children: getChildNodes(row),
         };
       });
   };
@@ -317,51 +379,33 @@
   const getChildNodes = (row, rows) => {
     let children = [];
 
-    if (linkFields?.length) {
-      linkFields.forEach((element) => {
-        if (validLinkField(element) && row[element])
-          children.push({
-            type: "linkBranch",
-            renderSlot: false,
-            label: element,
-            quiet,
-            nodeSelection: nodeSelection,
-            selectedNodes: selectedNodes,
-            children: row[element]?.map((link) => {
-              return {
-                nodeSelection: nodeSelection,
-                selectedNodes: selectedNodes,
-                id: link["_id"],
-                quiet,
-                label: link.primaryDisplay,
-                type: "linkItem",
-              };
-            }),
-          });
-      });
-    }
-
     if (recursive) {
       rows
-        .filter((x) => x[joinField]?._id == row[idColumn])
-        .forEach((node) => {
+        .filter((x) => x[joinField] == row[idColumn])
+        .forEach((row) => {
           children.push({
-            renderSlot: true,
-            id: node[idColumn],
-            label: node[labelColumn || primaryDisplay],
+            renderSlot: hasSlot,
+            id: row[idColumn],
+            icon: nodeIcon,
+            row,
+            label: labelTemplate
+              ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
+              : row[primaryDisplay],
+            color: nodeFGColor
+              ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
+              : undefined,
+            bgColor: nodeBGColor
+              ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
+              : undefined,
             quiet,
-            children: getChildNodes(node, rows),
+            children: getChildNodes(row, rows),
           });
         });
     }
     return children;
   };
 
-  const validLinkField = (field) => {
-    return definition.schema[field]?.type == "link";
-  };
-
-  const handleNodeSelect = (e) => {
+  const handleNodeSelect = async (e) => {
     let index = $selectedNodes.findIndex((x) => x.id == e.detail.id);
     if (index > -1) {
       $selectedNodes.splice(index, 1);
@@ -375,15 +419,48 @@
         "Cannot select more than " + maxNodeSelection + " items"
       );
     }
-    let selectedRows = $fetch?.rows?.filter((row) =>
-      $selectedNodes.find((x) => x.id == row._id)
+    $selectedRows = $fetch?.rows?.filter((row) =>
+      $selectedNodes.find((x) => x.id == row[idColumn])
     );
 
-    onNodeSelect?.({ selectedRows });
+    // Enrich context before execution
+    let context = {
+      selected: $selectedRows,
+      selectedIds: $selectedRows.map((x) => x[idColumn]),
+      menuRow,
+    };
+
+    let cmd = enrichButtonActions(onNodeSelect, {
+      ...$allContext,
+      [comp_id]: {
+        ...e.detail.row,
+        ...context,
+      },
+    });
+    await cmd?.();
   };
 
-  const handleNodeClick = (e) => {
-    onNodeClick?.(e.detail);
+  const handleNodeClick = async (e) => {
+    let cmd = enrichButtonActions(onNodeClick, {
+      ...$allContext,
+      [comp_id]: { ...context, ...e.detail.row },
+    });
+    await cmd?.();
+  };
+
+  /**
+   *
+   * @param e.detail will contain the onClick event, the row and the group ( if any )
+   *
+   * We enrich our own context with the current row before enriching and
+   * executing the action
+   */
+  const handleNodeAction = async (e) => {
+    let cmd = enrichButtonActions(e.detail.onClick, {
+      ...$allContext,
+      [comp_id]: { ...context, ...e.detail.row, group: e.detail.group },
+    });
+    await cmd?.();
   };
 
   const handleSearch = (e) => {
@@ -402,30 +479,48 @@
       searchFilter = [];
     }
   };
-  const parseJoinField = (rows, field, recursive) => {
-    if (recursive && field && rows?.length)
-      rows
-        .filter((x) => x[field])
-        .filter((x) => typeof x[field] == "string")
-        .map((row) => (row[field] = safeParse(row[field])));
+
+  const resetSelections = () => {
+    $selectedNodes = [];
   };
 
-  const safeParse = (str) => {
-    let res;
-    try {
-      res = JSON.parse(str)[0];
-    } catch {}
-    return res;
+  const getPrimaryDisplay = (definition) => {
+    if (definition)
+      if (definition.primaryDisplay) return definition.primaryDisplay;
+      else return Object.keys(definition.schema)[0];
   };
 
   setContext("superTreeOptions", treeOptions);
+
+  $: $component.styles = {
+    ...$component.styles,
+    normal: {
+      "background-color": quiet
+        ? "transparent"
+        : "var(--spectrum-global-color-gray-50)",
+      flex: flex ? "auto" : "none",
+      display: "flex",
+      overflow: "hidden",
+      ...$component.styles.normal,
+    },
+  };
+
+  let clientHeight;
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-click-events-have-key-events -->
-<div class="super-tree" use:styleable={$component.styles}>
-  <Provider {actions} data={context}>
-    {#if header}
+<div use:styleable={$component.styles}>
+  <div
+    bind:clientHeight
+    class="super-tree"
+    class:quiet
+    class:disabled
+    class:nested
+    class:list
+  >
+    <Provider {actions} data={context} />
+    {#if header && !nested}
       <TreeHeader
         headerText={headerText || datasource?.label}
         {headerButtons}
@@ -433,40 +528,33 @@
         {headerMenuIcon}
         {quiet}
         {searchable}
+        {collapsible}
         on:search={handleSearch}
       />
     {/if}
 
     {#if $fetch?.loading && !$fetch?.loaded}
-      <div style="height: 2rem;"></div>
+      <div class="loader" class:list>
+        <div class="animation" />
+      </div>
     {:else}
-      <ul
-        class="spectrum-TreeView"
-        class:spectrum-TreeView--quiet={quiet}
-        style:visibility={"visible"}
-        style:height={"auto"}
-        style:overflow-y={"auto"}
+      <div
+        class="tree"
+        style:height={nested ? "fit-content" : clientHeight - header * 40}
       >
         {#if rootNodes.length}
           {#if rootless}
-            {#each [...rootNodes] as { id, icon, label, renderSlot, children, open, type, selectable }, idx}
+            {#each rootNodes as node, idx (idx)}
               <Tree
-                {id}
-                {type}
-                {selectable}
-                {icon}
+                {...node}
                 {disabled}
-                hasSlot={$component.children}
-                {renderSlot}
-                label={label || "Not Set"}
-                {open}
-                {children}
-                on:nodeSelect={handleNodeSelect}
-                on:nodeClick={handleNodeClick}
                 {quiet}
                 {list}
                 {accordion}
                 flat={!recursive}
+                on:nodeSelect={handleNodeSelect}
+                on:nodeClick={handleNodeClick}
+                on:nodeAction={handleNodeAction}
               >
                 <slot />
               </Tree>
@@ -474,45 +562,195 @@
           {:else}
             <Tree
               id={"tree-root"}
-              {nodeSelection}
-              {selectedNodes}
               {disabled}
               hasSlot={$component.children}
               renderSlot={false}
               label={branchName || datasource?.label || $component.name}
               children={rootNodes}
-              open={!rootless && !collapsed}
+              open={!collapsed}
               {quiet}
               {list}
               {accordion}
               flat={!recursive}
               on:nodeSelect={handleNodeSelect}
               on:nodeClick={handleNodeClick}
+              on:nodeAction={handleNodeAction}
             >
               <slot />
             </Tree>
           {/if}
         {:else}
-          <li class="spectrum-TreeView-item">
-            <!-- svelte-ignore a11y-invalid-attribute -->
-            <a href="" class="spectrum-TreeView-itemLink">No Records Found</a>
-          </li>
+          <div class="tree-node">
+            {#if nested}
+              <span class="tree-node-item"
+                >{branchName || datasource?.label || $component.name}</span
+              >
+            {:else}
+              <span class="tree-node-item flat">No Records Found</span>
+            {/if}
+          </div>
         {/if}
-      </ul>
+      </div>
     {/if}
-    <!-- Header Action Menu Popover -->
-  </Provider>
+  </div>
 </div>
 
 <style>
+  /* HTML: <div class="loader"></div> */
+
   .super-tree {
-    min-width: 220px;
+    flex: auto;
+    min-height: 360px;
+    width: 240px;
+    overflow: hidden;
+    border: 1px solid var(--spectrum-global-color-gray-300);
     display: flex;
     flex-direction: column;
-    align-items: stretch;
-    overflow-y: auto;
+    position: relative;
+    &.quiet {
+      border-color: transparent;
+
+      & * .tree-node {
+        font-weight: 400;
+
+        & > .tree-node-item {
+          &.selected {
+            background-color: var(--spectrum-global-color-gray-200);
+          }
+        }
+      }
+    }
+
+    &.nested {
+      width: 100%;
+      min-height: 2rem;
+      border: unset;
+    }
+
+    & * .tree-node {
+      position: relative;
+      width: 100%;
+      line-height: 2rem;
+
+      & > .tree-node-item {
+        position: relative;
+        display: flex;
+        justify-content: flex-start;
+        max-height: 2rem;
+
+        &.selected {
+          background-color: var(--spectrum-global-color-blue-100);
+          color: var(--spectrum-global-color-gray-900);
+        }
+
+        &.flat {
+          padding-left: 0.5rem;
+        }
+
+        &.hasChildren:not(.disabled) {
+          cursor: pointer;
+        }
+
+        &:hover:not(.selected):not(.disabled)::before {
+          position: absolute;
+          left: 0px;
+          top: 0px;
+          right: 0px;
+          bottom: 0px;
+          content: "";
+          background-color: var(--spectrum-global-color-gray-100);
+          z-index: 0;
+        }
+
+        &:hover:not(.disabled) {
+          color: var(--spectrum-global-color-gray-900);
+        }
+      }
+
+      & > .tree {
+        position: relative;
+        margin-left: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+    & > .tree {
+      height: 100%;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    &.disabled {
+      color: var(--spectrum-global-color-gray-600);
+    }
+
+    &.list {
+      & > .tree {
+        gap: 0.5rem;
+        padding: 0.5rem;
+      }
+
+      &.nested {
+        & > .tree {
+          padding: unset;
+        }
+      }
+
+      & > * .tree-node {
+        border: 1px solid var(--spectrum-global-color-gray-300);
+        border-radius: 4px;
+
+        &:hover {
+          border-color: var(--spectrum-global-color-gray-400);
+        }
+
+        &.selected {
+          border-color: var(--spectrum-global-color-blue-500);
+        }
+
+        & > .tree-node-item {
+          padding: 0.25rem;
+          max-height: unset;
+        }
+
+        & > .tree {
+          padding: 0.5rem;
+          gap: 0.5rem;
+          margin-left: 1rem;
+        }
+      }
+    }
   }
-  .spectrum-TreeView {
-    margin: unset;
+
+  .loader {
+    display: flex;
+    align-items: center;
+    padding-left: 1rem;
+    height: 2rem;
+
+    &.list {
+      height: 2.6rem;
+    }
+
+    & > .animation {
+      height: 5px;
+      aspect-ratio: 5;
+      -webkit-mask: linear-gradient(90deg, #0000, #000 20% 80%, #0000);
+      background: radial-gradient(
+          closest-side at 37.5% 50%,
+          var(--spectrum-global-color-blue-500) 94%,
+          #0000
+        )
+        0 / calc(80% / 3) 100%;
+      animation: l48 0.75s infinite linear;
+    }
+    @keyframes l48 {
+      100% {
+        background-position: 36.36%;
+      }
+    }
   }
 </style>

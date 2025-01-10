@@ -7,45 +7,99 @@
     "description": "A Tree View component for Budibase",
     "hasChildren": true,
     "showEmptyState": false,
-    "actions": ["RefreshDatasource", "ClearRowSelection"],
-    "styles": ["size"],
+    "styles": ["size", "background", "border"],
     "icon": "TreeCollapseAll",
-    "context": {
-      "type": "static",
-      "values": [
-        {
-          "label": "Selected Rows",
-          "key": "selected",
-          "type": "array"
-        },
-        {
-          "label": "Menu Row",
-          "key": "menuRow",
-          "type": "object"
-        },
-        {
-          "label": "Node ID",
-          "key": "id",
-          "type": "string"
-        },
-        {
-          "label": "Node Label",
-          "key": "label",
-          "type": "string"
-        },
-        {
-          "label": "Node Children",
-          "key": "children",
-          "type": "array"
-        }
-      ]
-    },
+    "actions": [
+      { "type": "RefreshDatasource" },
+      { "type": "ClearRowSelection" }
+    ],
+    "context": [
+      {
+        "type": "static",
+        "scope": "global",
+        "values": [
+          {
+            "label": "Selected Rows",
+            "key": "selected",
+            "type": "array"
+          },
+          {
+            "label": "Selected IDs",
+            "key": "selectedIds",
+            "type": "array"
+          }
+        ]
+      },
+      {
+        "scope": "local",
+        "type": "schema"
+      },
+      {
+        "type": "static",
+        "scope": "local",
+        "values": [
+          {
+            "label": "Node Children",
+            "key": "children",
+            "type": "array"
+          },
+          {
+            "label": "Group",
+            "key": "group",
+            "type": "string"
+          }
+        ]
+      }
+    ],
     "settings": [
+      {
+        "type": "select",
+        "key": "controlType",
+        "label": "Control Type",
+        "defaultValue": "tree",
+        "options": [
+          { "label": "Tree View", "value": "tree" },
+          { "label": "List View", "value": "list" },
+          { "label": "Accordion", "value": "accordion" }
+        ]
+      },
+      {
+        "type": "select",
+        "key": "treeType",
+        "label": "Tree Type",
+        "defaultValue": "flat",
+        "options": [
+          { "label": "Flat", "value": "flat" },
+          { "label": "Recursive", "value": "recursive" },
+          { "label": "Group By", "value": "groupBy" }
+        ]
+      },
       {
         "type": "dataSource",
         "key": "datasource",
         "label": "Data",
         "required": true
+      },
+      {
+        "type": "field",
+        "key": "idColumn",
+        "label": "ID Column",
+        "defaultValue": "_id",
+        "required": true
+      },
+      {
+        "type": "field",
+        "key": "joinField",
+        "label": "Join Column",
+        "resetOn": "datasource",
+        "dependsOn": { "setting": "treeType", "value": "recursive" }
+      },
+      {
+        "type": "field",
+        "key": "groupField",
+        "label": "Group By",
+        "resetOn": "datasource",
+        "dependsOn": { "setting": "treeType", "value": "groupBy" }
       },
       {
         "type": "field/sortable",
@@ -74,30 +128,6 @@
         "defaultValue": 50
       },
       {
-        "type": "select",
-        "key": "treeType",
-        "label": "Tree Type",
-        "defaultValue": "flat",
-        "options": [
-          { "label": "Flat", "value": "flat" },
-          { "label": "Recursive", "value": "recursive" },
-          { "label": "Group By", "value": "groupBy" }
-        ]
-      },
-      {
-        "type": "field",
-        "key": "joinField",
-        "label": "Join Column",
-        "resetOn": "datasource",
-        "dependsOn": { "setting": "treeType", "value": "recursive" }
-      },
-      {
-        "type": "number",
-        "key": "depth",
-        "label": "Max Depth",
-        "dependsOn": { "setting": "treeType", "value": "recursive" }
-      },
-      {
         "type": "boolean",
         "key": "disabled",
         "label": "Disabled"
@@ -109,28 +139,47 @@
         "defaultValue": true
       },
       {
-        "type": "text",
-        "key": "branchName",
-        "label": "Root Node Text",
-        "dependsOn": { "setting": "rootless", "value": true, "invert": true }
-      },
-      {
-        "type": "boolean",
-        "key": "collapsed",
-        "label": "Collapsed",
-        "defaultValue": true,
-        "dependsOn": { "setting": "rootless", "value": true, "invert": true }
-      },
-      {
-        "type": "boolean",
-        "key": "showRelationships",
-        "label": "List Rel/s"
-      },
-      {
         "type": "boolean",
         "key": "header",
         "label": "Header",
         "defaultValue": true
+      },
+      {
+        "type": "boolean",
+        "key": "nodeSelection",
+        "label": "Selection",
+        "showInBar": true,
+        "barStyle": "buttons",
+        "barIcon": "SelectBox",
+        "barTitle": "Select Rows",
+        "defaultValue": false
+      },
+      {
+        "section": true,
+        "name": "Tree Settings",
+        "settings": [
+          {
+            "type": "text",
+            "key": "branchName",
+            "label": "Root Node Text",
+            "dependsOn": {
+              "setting": "rootless",
+              "value": true,
+              "invert": true
+            }
+          },
+          {
+            "type": "boolean",
+            "key": "collapsed",
+            "label": "Collapsed",
+            "defaultValue": true,
+            "dependsOn": {
+              "setting": "rootless",
+              "value": true,
+              "invert": true
+            }
+          }
+        ]
       },
       {
         "section": true,
@@ -180,35 +229,8 @@
           {
             "type": "text",
             "key": "labelTemplate",
-            "label": "Label Template",
-            "placeholder": "{{ Row.primaryDisplay }}",
+            "label": "Label",
             "nested": true
-          },
-          {
-            "type": "boolean",
-            "key": "nodeSelection",
-            "label": "Node Selection"
-          },
-          {
-            "type": "boolean",
-            "key": "checkboxes",
-            "label": "Checkboxes",
-            "dependsOn": "nodeSelection"
-          },
-          {
-            "type": "number",
-            "key": "maxNodeSelection",
-            "label": "Max Selected",
-            "dependsOn": "nodeSelection",
-            "min": 1,
-            "defaultValue": 1
-          },
-          {
-            "type": "text",
-            "key": "selectedIds",
-            "label": "Selected IDs",
-            "placeholder": "Comma seperated list",
-            "dependsOn": "nodeSelection"
           },
           {
             "type": "boolean",
@@ -235,46 +257,14 @@
       },
       {
         "section": true,
-        "name": "Relationship Settings",
-        "dependsOn": "showRelationships",
-        "settings": [
-          {
-            "type": "multifield",
-            "key": "linkFields",
-            "label": "Columns",
-            "resetOn": ["datasource", "showRelationships"],
-            "dependsOn": "showRelationships"
-          },
-          {
-            "type": "boolean",
-            "key": "linksSelectable",
-            "label": "Selectable",
-            "defaultValue": false
-          },
-          {
-            "type": "buttonConfiguration",
-            "key": "linkMenuItems",
-            "wide": true
-          }
-        ]
-      },
-      {
-        "section": true,
         "name": "Group By Settings",
         "dependsOn": { "setting": "treeType", "value": "groupBy" },
         "settings": [
           {
-            "type": "field",
-            "key": "groupField",
-            "label": "Group By",
-            "resetOn": "datasource"
-          },
-          {
             "type": "text",
             "key": "groupNodeLabel",
             "label": "Group Label",
-            "nested": true,
-            "placeholder": "{{ value }}"
+            "nested": true
           },
           {
             "type": "boolean",
@@ -306,41 +296,59 @@
           {
             "type": "buttonConfiguration",
             "key": "groupMenuItems",
+            "nested": true,
             "dependsOn": "groupMenu",
+            "context": [{ "key": "group", "label": "Group" }],
             "wide": true
           }
         ]
       },
       {
         "section": true,
+        "dependsOn": "nodeSelection",
+        "name": "Selection Settings",
+        "collapsed": true,
+        "settings": [
+          {
+            "type": "boolean",
+            "key": "checkboxes",
+            "label": "Checkboxes",
+            "dependsOn": "nodeSelection"
+          },
+          {
+            "type": "number",
+            "key": "maxNodeSelection",
+            "label": "Max Selected",
+            "dependsOn": "nodeSelection",
+            "min": 1,
+            "defaultValue": 1
+          },
+          {
+            "type": "text",
+            "key": "selectedIds",
+            "label": "Selected IDs",
+            "placeholder": "Comma seperated list",
+            "dependsOn": "nodeSelection"
+          }
+        ]
+      },
+      {
+        "section": true,
         "name": "Events",
+        "collapsed": true,
         "settings": [
           {
             "type": "event",
             "key": "onNodeSelect",
             "dependsOn": "nodeSelection",
             "label": "On Node Select",
-            "context": [
-              {
-                "label": "Selected Rows",
-                "key": "selectedRows"
-              }
-            ]
+            "nested": true
           },
           {
             "type": "event",
             "key": "onNodeClick",
             "label": "On Node Click",
-            "context": [
-              {
-                "label": "Node Value",
-                "key": "id"
-              },
-              {
-                "label": "Node Label",
-                "key": "label"
-              }
-            ]
+            "nested": true
           },
           {
             "type": "event",
@@ -349,7 +357,7 @@
             "label": "On Group Select",
             "context": [
               {
-                "label": "Node Value",
+                "label": "Node Id",
                 "key": "id"
               },
               {
@@ -373,46 +381,6 @@
                 "key": "label"
               }
             ]
-          },
-          {
-            "type": "event",
-            "key": "onLinkSelect",
-            "label": "On Link Select",
-            "dependsOn": "linksSelectable",
-            "context": [
-              {
-                "label": "Node Row",
-                "key": "row"
-              },
-              {
-                "label": "Node ID",
-                "key": "id"
-              },
-              {
-                "label": "Node Label",
-                "key": "label"
-              }
-            ]
-          },
-          {
-            "type": "event",
-            "key": "onLinkClick",
-            "dependsOn": "showRelationships",
-            "label": "On Link Click",
-            "context": [
-              {
-                "label": "Node Row",
-                "key": "row"
-              },
-              {
-                "label": "Node ID",
-                "key": "id"
-              },
-              {
-                "label": "Node Label",
-                "key": "label"
-              }
-            ]
           }
         ]
       },
@@ -423,13 +391,18 @@
         "settings": [
           {
             "type": "select",
-            "key": "controlType",
-            "label": "Control Type",
-            "defaultValue": "tree",
+            "key": "chevronPosition",
+            "defaultValue": "left",
+            "resetOn": "controlType",
+            "label": "Chevron",
+            "dependsOn": {
+              "setting": "controlType",
+              "value": "accordion",
+              "invert": true
+            },
             "options": [
-              { "label": "Tree View", "value": "tree" },
-              { "label": "List View", "value": "list" },
-              { "label": "Accordion", "value": "accordion" }
+              { "label": "Left", "value": "left" },
+              { "label": "Right", "value": "right" }
             ]
           },
           {
@@ -458,15 +431,15 @@
           },
           {
             "type": "text",
-            "key": "nodeColorTemplate",
+            "key": "nodeFGColor",
             "label": "Text Color",
-            "placeholder": "{{ value }}"
+            "nested": true
           },
           {
             "type": "text",
-            "key": "nodeBackgroundTemplate",
+            "key": "nodeBGColor",
             "label": "Background",
-            "placeholder": "{{ value }}"
+            "nested": true
           }
         ]
       },
@@ -485,15 +458,39 @@
             "type": "text",
             "key": "groupFGColor",
             "label": "Text Color",
-            "placeholder": "{{ value }}"
+            "nested": true
           },
           {
             "type": "text",
             "key": "groupBGColor",
             "label": "Background",
-            "placeholder": "{{ value }}"
+            "nested": true
           }
         ]
+      },
+      {
+        "type": "select",
+        "tag": "style",
+        "label": "Flex Mode",
+        "showLabel": false,
+        "key": "flex",
+        "showInBar": true,
+        "barStyle": "buttons",
+        "options": [
+          {
+            "label": "Shrink",
+            "value": false,
+            "barIcon": "Minimize",
+            "barTitle": "Shrink container"
+          },
+          {
+            "label": "Grow",
+            "value": true,
+            "barIcon": "Maximize",
+            "barTitle": "Grow container"
+          }
+        ],
+        "defaultValue": false
       }
     ]
   }
