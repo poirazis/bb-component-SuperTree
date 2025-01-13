@@ -4,6 +4,7 @@
   import CellString from "../../bb_super_components_shared/src/lib/SuperTableCells/CellString.svelte";
   import SuperPopover from "../../bb_super_components_shared/src/lib/SuperPopover/SuperPopover.svelte";
   import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
+  import { readonly } from "svelte/store";
 
   const { enrichButtonActions } = getContext("sdk");
   const context = getContext("context");
@@ -17,6 +18,7 @@
   export let headerDropMenuItems;
   export let headerButtons;
   export let headerMenuIcon;
+  export let inBuilder;
 
   let inEdit;
   let hover;
@@ -31,7 +33,8 @@
     padding: "0.5rem",
     debounce: 200,
     clearValueIcon: true,
-    role: "inlineInput",
+    role: "formInput",
+    readonly: inBuilder,
   };
 
   $: enrichButtons(headerDropMenuItems, $context);
@@ -42,6 +45,7 @@
   };
 
   const handleSearch = (e) => {
+    if (inBuilder) return;
     searchFilter = e.detail;
     dispatch("search", e.detail);
   };
@@ -169,7 +173,6 @@
   }
   .inEdit {
     background-color: var(--spectrum-global-color-gray-50) !important;
-    border: 4px solid var(--spectrum-global-color-gray-200);
   }
   .actionMenu {
     min-width: 120px;

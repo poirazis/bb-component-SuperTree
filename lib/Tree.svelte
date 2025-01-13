@@ -121,7 +121,7 @@
       : bgColor}
     on:mouseenter={() => (hover = true)}
     on:mouseleave={() => (hover = false)}
-    on:mousedown|self={handleClick}
+    on:click|self={handleClick}
   >
     <div
       class="control-content"

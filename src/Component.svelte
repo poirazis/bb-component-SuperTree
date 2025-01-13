@@ -105,9 +105,11 @@
   let query = {};
   let defaultQuery;
   let searchFilter;
-  let buildingTree = true;
+  let clientHeight;
+  let loaded;
 
   $: comp_id = $component.id;
+  $: inBuilder = $builderStore.inBuilder;
   $: nested = $component.ancestors.at(-2) == "plugin/bb-component-SuperTree";
   $: quiet = $parentTree ? $parentTree.quiet : quiet;
 
@@ -342,7 +344,8 @@
         ];
       });
     }
-    buildingTree = false;
+
+    loaded = true;
   };
 
   const buildTreeAsync = async (rows) => {
@@ -406,7 +409,15 @@
   };
 
   const handleNodeSelect = async (e) => {
+    if (inBuilder) return;
+
+    let row = e.detail.row;
+
     let index = $selectedNodes.findIndex((x) => x.id == e.detail.id);
+
+    // If unselecting clear the context
+    if (index > -1) row = {};
+
     if (index > -1) {
       $selectedNodes.splice(index, 1);
       $selectedNodes = $selectedNodes;
@@ -423,20 +434,15 @@
       $selectedNodes.find((x) => x.id == row[idColumn])
     );
 
-    // Enrich context before execution
-    let context = {
-      selected: $selectedRows,
-      selectedIds: $selectedRows.map((x) => x[idColumn]),
-      menuRow,
-    };
-
+    // Enrich the context with the values of the row being selected
     let cmd = enrichButtonActions(onNodeSelect, {
       ...$allContext,
       [comp_id]: {
-        ...e.detail.row,
-        ...context,
+        ...$allContext[comp_id],
+        ...row,
       },
     });
+
     await cmd?.();
   };
 
@@ -504,8 +510,6 @@
       ...$component.styles.normal,
     },
   };
-
-  let clientHeight;
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -529,11 +533,12 @@
         {quiet}
         {searchable}
         {collapsible}
+        {inBuilder}
         on:search={handleSearch}
       />
     {/if}
 
-    {#if $fetch?.loading && !$fetch?.loaded}
+    {#if !loaded}
       <div class="loader" class:list>
         <div class="animation" />
       </div>
@@ -700,6 +705,7 @@
       }
 
       & > * .tree-node {
+        background-color: var(--spectrum-global-color-gray-75);
         border: 1px solid var(--spectrum-global-color-gray-300);
         border-radius: 4px;
 
