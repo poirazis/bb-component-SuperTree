@@ -15,12 +15,32 @@
     memo,
     API,
     builderStore,
+    screenStore,
     notificationStore,
   } = getContext("sdk");
 
   const component = getContext("component");
   const parentTree = getContext("superTreeOptions");
   const allContext = getContext("context");
+
+  const lookupComponent = (components, id) => {
+    let parent;
+    let pos = components?.findIndex((comp) => comp._id == id);
+    if (pos > -1) return components[pos];
+    else
+      components?.forEach((comp) => {
+        if (!parent) parent = lookupComponent(comp._children, id);
+      });
+
+    return parent;
+  };
+
+  const parent = lookupComponent(
+    $screenStore.activeScreen.props._children,
+    $component.path.at(-2)
+  );
+
+  const nested = parent?._component == "plugin/bb-component-SuperTree";
 
   export let branchName;
   export let controlType = "tree";
@@ -49,6 +69,7 @@
   export let nodeSelection;
   export let nodeFGColor;
   export let nodeBGColor;
+  export let nodeIconColor;
 
   export let checkboxes;
   export let maxNodeSelection;
@@ -69,8 +90,6 @@
   export let sortOrder;
   export let limit;
   export let paginate;
-
-  export let idColumn = "_id";
   export let labelColumn;
   export let labelTemplate;
 
@@ -78,6 +97,7 @@
   export let groupField;
 
   export let flex;
+  export let idColumn;
 
   // Events
   export let onNodeSelect;
@@ -110,7 +130,6 @@
 
   $: comp_id = $component.id;
   $: inBuilder = $builderStore.inBuilder;
-  $: nested = $component.ancestors.at(-2) == "plugin/bb-component-SuperTree";
   $: quiet = $parentTree ? $parentTree.quiet : quiet;
 
   $: headerButtons = headerMenu
@@ -188,7 +207,7 @@
     nodeMenuIcon,
     nodeButtons,
     nodeMenuDropItems,
-    chevronPosition: accordion ? "right" : chevronPosition,
+    chevronPosition,
     hasSlot,
     quiet,
   });
@@ -209,15 +228,9 @@
   ];
 
   $: list = controlType == "list";
-  $: accordion = controlType == "accordion";
-  $: menuRow = $menuStore
-    ? $fetch.rows.find((e) => e[idColumn] == $menuStore)
-    : {};
-
   $: context = {
     selected: $selectedRows,
     selectedIds: $selectedRows.map((x) => x[idColumn]),
-    menuRow,
   };
 
   const createFetch = (datasource) => {
@@ -317,6 +330,9 @@
             bgColor: nodeBGColor
               ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
               : undefined,
+            iconColor: nodeIconColor
+              ? processStringSync(nodeIconColor, { [comp_id]: { ...row } })
+              : undefined,
             children: getChildNodes(row, rows),
           });
         });
@@ -339,17 +355,20 @@
             bgColor: nodeBGColor
               ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
               : undefined,
+            iconColor: nodeIconColor
+              ? processStringSync(nodeIconColor, { [comp_id]: { ...row } })
+              : undefined,
             children: getChildNodes(row),
           },
         ];
       });
     }
-
-    loaded = true;
   };
 
   const buildTreeAsync = async (rows) => {
-    if (rows?.length) await buildTree(rows);
+    loaded = false;
+    await buildTree(rows);
+    loaded = true;
   };
 
   const getGroupChildNodes = (groupValue) => {
@@ -491,9 +510,10 @@
   };
 
   const getPrimaryDisplay = (definition) => {
-    if (definition)
+    if (definition) {
       if (definition.primaryDisplay) return definition.primaryDisplay;
       else return Object.keys(definition.schema)[0];
+    }
   };
 
   setContext("superTreeOptions", treeOptions);
@@ -507,6 +527,7 @@
       flex: flex ? "auto" : "none",
       display: "flex",
       overflow: "hidden",
+      height: nested ? "auto" : "360",
       ...$component.styles.normal,
     },
   };
@@ -538,15 +559,12 @@
       />
     {/if}
 
-    {#if !loaded}
+    {#if $fetch.loading && !$fetch.loaded}
       <div class="loader" class:list>
         <div class="animation" />
       </div>
     {:else}
-      <div
-        class="tree"
-        style:height={nested ? "fit-content" : clientHeight - header * 40}
-      >
+      <div class="tree">
         {#if rootNodes.length}
           {#if rootless}
             {#each rootNodes as node, idx (idx)}
@@ -555,7 +573,6 @@
                 {disabled}
                 {quiet}
                 {list}
-                {accordion}
                 flat={!recursive}
                 on:nodeSelect={handleNodeSelect}
                 on:nodeClick={handleNodeClick}
@@ -575,7 +592,6 @@
               open={!collapsed}
               {quiet}
               {list}
-              {accordion}
               flat={!recursive}
               on:nodeSelect={handleNodeSelect}
               on:nodeClick={handleNodeClick}
@@ -587,11 +603,16 @@
         {:else}
           <div class="tree-node">
             {#if nested}
-              <span class="tree-node-item"
-                >{branchName || datasource?.label || $component.name}</span
+              <div
+                class="tree-node-item disabled"
+                style:padding-left={"1.25rem"}
               >
+                <span>
+                  {branchName || datasource?.label || $component.name}</span
+                >
+              </div>
             {:else}
-              <span class="tree-node-item flat">No Records Found</span>
+              <span class="tree-node-item flat disabled">No Records Found</span>
             {/if}
           </div>
         {/if}
@@ -601,14 +622,12 @@
 </div>
 
 <style>
-  /* HTML: <div class="loader"></div> */
-
   .super-tree {
     flex: auto;
     min-height: 360px;
     width: 240px;
     overflow: hidden;
-    border: 1px solid var(--spectrum-global-color-gray-300);
+    border: 1px solid var(--spectrum-global-color-gray-200);
     display: flex;
     flex-direction: column;
     position: relative;
@@ -628,8 +647,9 @@
 
     &.nested {
       width: 100%;
-      min-height: 2rem;
+      height: auto;
       border: unset;
+      min-height: unset;
     }
 
     & * .tree-node {
@@ -642,6 +662,9 @@
         display: flex;
         justify-content: flex-start;
         max-height: 2rem;
+        overflow: hidden;
+        background-color: transparent;
+        color: var(--spectrum-global-color-gray-700);
 
         &.selected {
           background-color: var(--spectrum-global-color-blue-100);
@@ -656,19 +679,26 @@
           cursor: pointer;
         }
 
-        &:hover:not(.selected):not(.disabled)::before {
-          position: absolute;
-          left: 0px;
-          top: 0px;
-          right: 0px;
-          bottom: 0px;
-          content: "";
-          background-color: var(--spectrum-global-color-gray-100);
-          z-index: 0;
+        &:hover:not(.selected):not(.disabled) {
+          background-color: var(--spectrum-global-color-gray-75);
         }
 
-        &:hover:not(.disabled) {
+        &:hover:not(.disabled),
+        &.is-menu-open {
           color: var(--spectrum-global-color-gray-900);
+          & > .menu-icon {
+            visibility: visible;
+          }
+        }
+
+        & > .menu-icon {
+          visibility: hidden;
+          cursor: pointer;
+          color: var(--spectrum-global-color-gray-600);
+        }
+
+        &.rightChevron {
+          padding-left: 0.75rem;
         }
       }
 
@@ -681,7 +711,6 @@
       }
     }
     & > .tree {
-      height: 100%;
       overflow: auto;
       display: flex;
       flex-direction: column;

@@ -21,13 +21,13 @@
   export let accordion;
   export let color;
   export let bgColor;
+  export let iconColor;
   export let flat;
   export let row;
   export let group;
 
   let openMenu;
   let menuAnchor;
-  let hover;
 
   $: context = {
     ...row,
@@ -99,10 +99,8 @@
   class="tree-node"
   class:is-disabled={disabled}
   class:is-open={open}
-  class:is-menu-open={openMenu}
   class:accordion
   class:groupBranch
-  class:selected
   style:background-color={bgColor}
 >
   <div
@@ -116,26 +114,27 @@
     style:color
     class:selected
     class:disabled
+    class:is-menu-open={openMenu}
     style:background-color={openMenu && !selected
       ? "var(--spectrum-global-color-gray-100)"
       : bgColor}
-    on:mouseenter={() => (hover = true)}
-    on:mouseleave={() => (hover = false)}
     on:click|self={handleClick}
   >
-    <div
-      class="control-content"
-      class:flat={flat && !hasChildren && !renderSlot}
-    >
-      {#if (hasChildren || renderSlot) && $treeOptions.chevronPosition == "left"}
-        <i
-          class="ri-arrow-right-s-line chevron"
-          class:open
-          on:click={handleClick}
-        >
-        </i>
-      {/if}
-    </div>
+    {#if !rightChevron}
+      <div
+        class="control-content"
+        class:flat={flat && !hasChildren && !renderSlot}
+      >
+        {#if (hasChildren || renderSlot) && $treeOptions.chevronPosition == "left"}
+          <i
+            class="ri-arrow-right-s-line chevron"
+            class:open
+            on:click={handleClick}
+          >
+          </i>
+        {/if}
+      </div>
+    {/if}
 
     <div class="left-contents" class:hasButtons>
       {#if hasCheboxes}
@@ -172,7 +171,7 @@
         {/each}
       {/if}
       {#if icon}
-        <i class={icon} class:icon style:color />
+        <i class={icon} class:icon style:color={iconColor} />
       {/if}
       {#if hasDropMenu && rightChevron}
         <SuperButton
@@ -201,19 +200,14 @@
     </div>
 
     <!-- The Node Action Menu  -->
-    {#if hasDropMenu && (hover || openMenu) && !disabled && !rightChevron}
-      <SuperButton
-        size="XS"
-        icon="ri-more-fill"
-        fillOnHover
-        quiet
-        selected={$menuStore == id}
+    {#if hasDropMenu && !rightChevron}
+      <i
+        class="ri-more-fill menu-icon"
         on:click={(e) => {
-          menuAnchor = e.detail;
+          menuAnchor = e.target;
           openMenu = !openMenu;
           $menuStore = openMenu ? id : false;
         }}
-        text=""
       />
     {/if}
 
@@ -233,7 +227,7 @@
       style:display={open ? "flex" : "none"}
       transition:slide={{ duration: 130 }}
     >
-      {#each children as node, idx}
+      {#each children as node}
         <svelte:self
           id={node.id}
           {hasSlot}
@@ -279,7 +273,7 @@
   >
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="actionMenu">
+    <div class="action-menu">
       {#each dropMenuItems as { text, icon, disabled, onClick }}
         <SuperButton
           size="M"
@@ -313,26 +307,24 @@
     font-size: 14px;
     color: var(--spectrum-global-color-gray-600);
     margin-right: 4px;
-    z-index: 1;
   }
   .checkbox {
     font-size: 14px;
     color: var(--spectrum-global-color-gray-600);
-    z-index: 1;
   }
 
   .chevron.accordion {
     color: var(--spectrum-global-color-gray-600);
     font-size: 18px;
-    z-index: 0;
   }
   .chevron.open {
     transform: rotate(90deg);
     color: var(--spectrum-global-color-gray-800);
   }
 
-  .actionMenu {
-    min-width: 120px;
+  .action-menu {
+    min-width: 160px;
+    padding: 0.25rem;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -351,7 +343,7 @@
   }
 
   .control-content {
-    min-width: 1.25rem;
+    min-width: 1.4rem;
     display: flex;
     justify-content: center;
 
@@ -363,7 +355,10 @@
       transition: all 130ms;
       font-size: 16px;
       color: var(--spectrum-global-color-gray-600);
-      z-index: 1;
+
+      &.open {
+        color: var(--spectrum-global-color-gray-800);
+      }
     }
   }
 
