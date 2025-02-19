@@ -4,6 +4,7 @@
   import CellString from "../../bb_super_components_shared/src/lib/SuperTableCells/CellString.svelte";
   import SuperPopover from "../../bb_super_components_shared/src/lib/SuperPopover/SuperPopover.svelte";
   import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
+  import { readonly } from "svelte/store";
 
   const { enrichButtonActions } = getContext("sdk");
   const context = getContext("context");
@@ -17,6 +18,7 @@
   export let headerDropMenuItems;
   export let headerButtons;
   export let headerMenuIcon;
+  export let inBuilder;
 
   let inEdit;
   let hover;
@@ -31,10 +33,12 @@
     padding: "0.5rem",
     debounce: 200,
     clearValueIcon: true,
-    role: "inlineInput",
+    role: "formInput",
+    readonly: inBuilder,
   };
 
   $: enrichButtons(headerDropMenuItems, $context);
+
   const enrichButtons = (buttons) => {
     buttons?.forEach((btn) => {
       btn.enrichedOnClick = enrichButtonActions(btn.onClick, $context);
@@ -42,6 +46,7 @@
   };
 
   const handleSearch = (e) => {
+    if (inBuilder) return;
     searchFilter = e.detail;
     dispatch("search", e.detail);
   };
@@ -58,6 +63,7 @@
   class:list={!quiet}
   class:quiet
   class:inEdit
+  class:searchable
   on:mouseleave={() => (hover = false)}
 >
   {#if (searchable && hover && !disabled) || searchFilter || inEdit}
@@ -89,14 +95,10 @@
       {/each}
 
       {#if headerDropMenuItems?.length}
-        <SuperButton
-          size="S"
-          icon={headerMenuIcon}
-          quiet
-          selected={openMenu}
-          on:click={handleMenu}
-          text=""
-        />
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <span class="drop-menu-icon" on:click={handleMenu}>
+          <i class={headerMenuIcon} />
+        </span>
       {/if}
     </div>
   {/if}
@@ -116,7 +118,7 @@
         openMenu = false;
       }}
     >
-      {#each headerDropMenuItems as { text, icon, disabled, enrichedOnClick, quiet }}
+      {#each headerDropMenuItems as { text, icon, disabled, enrichedOnClick }}
         <SuperButton
           size="M"
           {icon}
@@ -134,19 +136,16 @@
 
 <style>
   .searchHeader {
+    flex: none;
     width: 100%;
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: space-between;
-    transition: all 130ms;
-    height: 2.4rem;
-    padding-left: 0.25rem;
-    padding-right: 0.5rem;
+    height: 38px;
+    border-bottom: 1px solid var(--spectrum-global-color-gray-200);
     color: var(--spectrum-global-color-gray-800);
-
-    &:hover {
-      color: var(--spectrum-global-color-gray-800);
-    }
+    padding: 2px;
+    background-color: var(--spectrum-global-color-gray-100);
 
     & > i {
       &:hover {
@@ -154,28 +153,25 @@
         color: var(--primaryColor);
       }
     }
-  }
-  .searchHeader.list {
-    background-color: var(--spectrum-global-color-gray-100);
-  }
-  .searchHeader.list.quiet {
-    background-color: transparent !important;
-    padding-left: none !important;
-  }
 
-  .searchHeader.quiet {
-    background-color: transparent !important;
-    padding-left: none;
-  }
-  .inEdit {
-    background-color: var(--spectrum-global-color-gray-50) !important;
-    border: 4px solid var(--spectrum-global-color-gray-200);
+    & > .title {
+      align-self: center;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      padding-left: 0.5rem;
+    }
   }
   .actionMenu {
-    min-width: 120px;
+    min-width: 160px;
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    padding: 0.25rem;
   }
 
   .action-buttons {
@@ -183,21 +179,20 @@
     display: flex;
     align-items: center;
     gap: 0.25rem;
-  }
+    & > .drop-menu-icon {
+      min-width: 1.25rem;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      margin-right: 0.25rem;
+      margin-left: 0.25rem;
 
-  .title {
-    flex: auto;
-    font-size: 12px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-    transition: all 130ms;
-    padding-left: 0.35rem;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    overflow-x: hidden;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+      &:hover {
+        color: var(--spectrum-global-color-gray-900);
+        cursor: pointer;
+      }
+    }
   }
 </style>

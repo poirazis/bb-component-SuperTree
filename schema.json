@@ -53,53 +53,16 @@
     ],
     "settings": [
       {
-        "type": "select",
-        "key": "controlType",
-        "label": "Control Type",
-        "defaultValue": "tree",
-        "options": [
-          { "label": "Tree View", "value": "tree" },
-          { "label": "List View", "value": "list" },
-          { "label": "Accordion", "value": "accordion" }
-        ]
-      },
-      {
-        "type": "select",
-        "key": "treeType",
-        "label": "Tree Type",
-        "defaultValue": "flat",
-        "options": [
-          { "label": "Flat", "value": "flat" },
-          { "label": "Recursive", "value": "recursive" },
-          { "label": "Group By", "value": "groupBy" }
-        ]
-      },
-      {
         "type": "dataSource",
         "key": "datasource",
-        "label": "Data",
-        "required": true
+        "label": "Data"
       },
       {
         "type": "field",
         "key": "idColumn",
         "label": "ID Column",
-        "defaultValue": "_id",
+        "defaultValue": "id",
         "required": true
-      },
-      {
-        "type": "field",
-        "key": "joinField",
-        "label": "Join Column",
-        "resetOn": "datasource",
-        "dependsOn": { "setting": "treeType", "value": "recursive" }
-      },
-      {
-        "type": "field",
-        "key": "groupField",
-        "label": "Group By",
-        "resetOn": "datasource",
-        "dependsOn": { "setting": "treeType", "value": "groupBy" }
       },
       {
         "type": "field/sortable",
@@ -126,6 +89,41 @@
         "label": "Limit",
         "key": "limit",
         "defaultValue": 50
+      },
+      {
+        "type": "select",
+        "key": "controlType",
+        "label": "Control Type",
+        "defaultValue": "tree",
+        "options": [
+          { "label": "Tree View", "value": "tree" },
+          { "label": "List View", "value": "list" }
+        ]
+      },
+      {
+        "type": "select",
+        "key": "treeType",
+        "label": "Tree Type",
+        "defaultValue": "flat",
+        "options": [
+          { "label": "Flat", "value": "flat" },
+          { "label": "Recursive", "value": "recursive" },
+          { "label": "Group By", "value": "groupBy" }
+        ]
+      },
+      {
+        "type": "field",
+        "key": "joinField",
+        "label": "Join Column",
+        "resetOn": "datasource",
+        "dependsOn": { "setting": "treeType", "value": "recursive" }
+      },
+      {
+        "type": "field",
+        "key": "groupField",
+        "label": "Group By",
+        "resetOn": "datasource",
+        "dependsOn": { "setting": "treeType", "value": "groupBy" }
       },
       {
         "type": "boolean",
@@ -178,6 +176,12 @@
               "value": true,
               "invert": true
             }
+          },
+          {
+            "type": "boolean",
+            "key": "hideWhenEmpty",
+            "label": "Hide When Empty",
+            "defaultValue": false
           }
         ]
       },
@@ -428,6 +432,13 @@
             "type": "icon",
             "key": "nodeIcon",
             "label": "Node Icon"
+          },
+          {
+            "type": "text",
+            "key": "nodeIconColor",
+            "label": "Icon Color",
+            "nested": true,
+            "dependsOn": "nodeIcon"
           },
           {
             "type": "text",
