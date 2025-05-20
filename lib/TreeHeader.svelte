@@ -4,7 +4,6 @@
   import CellString from "../../bb_super_components_shared/src/lib/SuperTableCells/CellString.svelte";
   import SuperPopover from "../../bb_super_components_shared/src/lib/SuperPopover/SuperPopover.svelte";
   import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
-  import { readonly } from "svelte/store";
 
   const { enrichButtonActions } = getContext("sdk");
   const context = getContext("context");
@@ -31,9 +30,9 @@
     icon: "ri-search-line",
     disabled,
     padding: "0.5rem",
-    debounce: 200,
+    debounce: 500,
     clearValueIcon: true,
-    role: "formInput",
+    role: "inlineInput",
     readonly: inBuilder,
   };
 
@@ -48,7 +47,7 @@
   const handleSearch = (e) => {
     if (inBuilder) return;
     searchFilter = e.detail;
-    dispatch("search", e.detail);
+    dispatch("search", searchFilter);
   };
 
   const handleMenu = (e) => {
@@ -64,6 +63,7 @@
   class:quiet
   class:inEdit
   class:searchable
+  class:filtered={searchFilter}
   on:mouseleave={() => (hover = false)}
 >
   {#if (searchable && hover && !disabled) || searchFilter || inEdit}
@@ -142,16 +142,28 @@
     align-items: stretch;
     justify-content: space-between;
     height: 38px;
-    border-bottom: 1px solid var(--spectrum-global-color-gray-200);
     color: var(--spectrum-global-color-gray-800);
-    padding: 2px;
-    background-color: var(--spectrum-global-color-gray-100);
+    border-bottom: 1px solid transparent;
+
+    &.quiet {
+      background-color: unset;
+      border-bottom: none;
+      color: var(--spectrum-global-color-gray-700);
+    }
 
     & > i {
       &:hover {
         cursor: pointer;
         color: var(--primaryColor);
       }
+    }
+
+    &.inEdit {
+      border-bottom: 1px solid var(--spectrum-global-color-gray-400);
+    }
+
+    &.filtered {
+      border-bottom: 1px solid var(--spectrum-global-color-blue-400);
     }
 
     & > .title {
@@ -163,7 +175,7 @@
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
-      padding-left: 0.5rem;
+      padding-left: 0.65rem;
     }
   }
   .actionMenu {

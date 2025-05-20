@@ -1,6 +1,6 @@
 <script>
   import TreeHeader from "../lib/TreeHeader.svelte";
-  import { getContext, setContext } from "svelte";
+  import { getContext, setContext, tick } from "svelte";
   import { writable } from "svelte/store";
 
   import Tree from "../lib/Tree.svelte";
@@ -49,7 +49,7 @@
   export let collapsed;
   export let quiet;
 
-  export let searchable;
+  export let searchMode;
   export let disabled;
   export let rootless;
 
@@ -59,9 +59,9 @@
   export let headerMenuItems;
   export let headerShowButtons;
   export let headerMenuIcon = "ri-more-2-fill";
-  export let collapsible;
 
   export let nodeIcon;
+  export let nodeIconTemplate;
   export let nodeMenu;
   export let nodeMenuIcon = "ri-more-fill";
   export let nodeShowButtons;
@@ -92,9 +92,10 @@
   export let paginate;
   export let labelColumn;
   export let labelTemplate;
+  export let structuredData;
 
   export let joinField;
-  export let groupField;
+  export let groupFields = [];
 
   export let flex;
   export let idColumn;
@@ -103,7 +104,7 @@
   export let onNodeSelect;
   export let onNodeClick;
 
-  // Use Stores for non Primitive Data types to avoid unecessary refreshes
+  // Use Stores for non-primitive data types
   const dataSourceStore = memo(datasource);
   $: dataSourceStore.set(datasource);
 
@@ -125,12 +126,13 @@
   let query = {};
   let defaultQuery;
   let searchFilter;
-  let clientHeight;
-  let loaded;
+  let filtering = writable(false);
 
   $: comp_id = $component.id;
   $: inBuilder = $builderStore.inBuilder;
   $: quiet = $parentTree ? $parentTree.quiet : quiet;
+  $: disabled = $parentTree ? $parentTree.disabled : disabled;
+  $: searchable = searchMode && !disabled;
 
   $: headerButtons = headerMenu
     ? headerShowButtons < $headerMenuItemsStore?.length
@@ -175,7 +177,7 @@
   $: queryExtension = QueryUtils.buildQuery(searchFilter);
   $: query = extendQuery(defaultQuery, [queryExtension]);
 
-  // Fetch data and refresh when needed
+  // Fetch data
   $: fetch = createFetch($dataSourceStore);
   $: fetch.update({
     query,
@@ -187,7 +189,7 @@
 
   $: resetSelections(nodeSelection);
 
-  // Expose the Super Tree Context fot the Child nodes and nested Trees
+  // Tree context
   $: treeOptions.set({
     ...$$props,
     treeType,
@@ -198,7 +200,7 @@
     groupButtons,
     groupMenuDropItems,
     groupNodeIcon,
-    groupField,
+    groupFields,
     groupNodeLabel,
     selectedNodes,
     menuStore,
@@ -218,7 +220,7 @@
 
   $: primaryDisplay = getPrimaryDisplay(definition);
 
-  $: buildTreeAsync($fetch?.rows, $treeOptions);
+  $: buildTree($fetch?.rows, $treeOptions);
 
   $: actions = [
     {
@@ -230,7 +232,10 @@
   $: list = controlType == "list";
   $: context = {
     selected: $selectedRows,
-    selectedIds: $selectedRows.map((x) => x[idColumn]),
+    selectedIds: $selectedNodes,
+    selectedPath: $selectedNodes.length
+      ? getAncestors(rootNodes, $selectedNodes[0])
+      : [],
   };
 
   const createFetch = (datasource) => {
@@ -261,141 +266,134 @@
     return { ...extendedQuery, onEmptyFilter: "all" };
   };
 
+  const enrichNode = (row, idx, options = {}) => {
+    const {
+      isGroup = false,
+      groupValue,
+      type = "node",
+      children = [],
+      visible = true,
+    } = options;
+
+    return {
+      id: row[idColumn] || `${groupValue}`,
+      renderSlot: hasSlot,
+      type,
+      group: isGroup ? groupValue : undefined,
+      visible,
+      quiet: isGroup ? quiet : undefined,
+      row: isGroup ? undefined : row,
+      open: $builderStore.inBuilder && $component.children && idx === 0,
+      icon: nodeIconTemplate
+        ? processStringSync(nodeIconTemplate, { [comp_id]: { ...row } })
+        : nodeIcon,
+      iconColor: nodeIconColor
+        ? processStringSync(nodeIconColor, { [comp_id]: { ...row } })
+        : undefined,
+      label: labelTemplate
+        ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
+        : row[labelColumn || primaryDisplay],
+      color: nodeFGColor
+        ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
+        : undefined,
+      bgColor: nodeBGColor
+        ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
+        : undefined,
+      children,
+    };
+  };
+
   // Initialize Tree Structure
-  const buildTree = async (rows, filter) => {
+  const buildTree = (rows, filter) => {
     let nodes = [];
     groupByValues.clear();
     rootNodes = [];
 
-    if (treeType == "groupBy" && groupField) {
-      rows.map((row) => {
-        groupByValues.add(row[groupField]);
-      });
-      groupByValues = new Set(Array.from(groupByValues).sort());
-      nodes = [...groupByValues];
-      rootNodes = nodes.map((x, idx) => {
-        return {
-          type: "groupBranch",
-          selectable: groupSelectable,
-          renderSlot: groupSlot,
-          id: x,
-          open: $builderStore.inBuilder && $component.children && idx == 0,
-          icon: groupNodeIcon,
-          label: groupNodeLabel
-            ? processStringSync(groupNodeLabel, {
-                ...$allContext,
-                [comp_id]: {
-                  ...$allContext[comp_id],
-                  group: x,
-                },
-              })
-            : x,
-          color: groupFGColor
-            ? processStringSync(groupFGColor, {
-                ...$allContext,
-                [comp_id]: {
-                  ...$allContext[comp_id],
-                  group: x,
-                },
-              })
-            : undefined,
-          bgColor: groupBGColor
-            ? processStringSync(groupBGColor, {
-                ...$allContext,
-                [comp_id]: {
-                  ...$allContext[comp_id],
-                  group: x,
-                },
-              })
-            : undefined,
-          children: getGroupChildNodes(x),
-        };
-      });
+    if (structuredData) {
+      rootNodes = rows;
+      return;
+    }
+
+    if (treeType === "groupBy" && groupFields?.length > 0) {
+      rootNodes = buildGroupNodes(rows, groupFields, 0);
     } else if (recursive) {
       rows
         .filter((x) => !x[joinField])
-        .map((row, idx, arr) => {
+        .forEach((row, idx) => {
           rootNodes.push({
-            id: row[idColumn],
-            renderSlot: hasSlot,
-            icon: nodeIcon,
-            row,
-            open: $builderStore.inBuilder && $component.children && idx == 0,
-            label: labelTemplate
-              ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
-              : row[primaryDisplay],
-            color: nodeFGColor
-              ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
-              : undefined,
-            bgColor: nodeBGColor
-              ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
-              : undefined,
-            iconColor: nodeIconColor
-              ? processStringSync(nodeIconColor, { [comp_id]: { ...row } })
-              : undefined,
-            children: getChildNodes(row, rows),
+            ...enrichNode(row, idx, { children: getChildNodes(row, rows) }),
           });
         });
     } else {
-      rows.map((row, idx) => {
-        rootNodes = [
-          ...rootNodes,
-          {
-            id: row[idColumn],
-            row,
-            renderSlot: hasSlot,
-            open: $builderStore.inBuilder && $component.children && idx == 0,
-            icon: nodeIcon,
-            label: labelTemplate
-              ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
-              : row[primaryDisplay],
-            color: nodeFGColor
-              ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
-              : undefined,
-            bgColor: nodeBGColor
-              ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
-              : undefined,
-            iconColor: nodeIconColor
-              ? processStringSync(nodeIconColor, { [comp_id]: { ...row } })
-              : undefined,
-            children: getChildNodes(row),
-          },
-        ];
-      });
+      rows.forEach((row, idx) =>
+        rootNodes.push({
+          ...enrichNode(row, idx),
+        })
+      );
     }
   };
 
-  const buildTreeAsync = async (rows) => {
-    loaded = false;
-    await buildTree(rows);
-    loaded = true;
+  const buildGroupNodes = (rows, groupFields, level) => {
+    const currentField = groupFields[level];
+    const nextLevel = level + 1;
+    const isLastLevel = nextLevel >= groupFields.length;
+
+    const groupValues = new Set(rows.map((row) => row[currentField]).sort());
+
+    return Array.from(groupValues).map((value, idx) => {
+      const groupRows = rows.filter((row) => row[currentField] === value);
+      const children = isLastLevel
+        ? getGroupChildNodes(value, groupRows)
+        : buildGroupNodes(groupRows, groupFields, nextLevel);
+
+      return {
+        type: "groupBranch",
+        selectable: groupSelectable,
+        renderSlot: groupSlot,
+        id: `${currentField}-${value}`,
+        open: $builderStore.inBuilder && $component.children && idx === 0,
+        icon: groupNodeIcon,
+        label: groupNodeLabel
+          ? processStringSync(groupNodeLabel, {
+              ...$allContext,
+              [comp_id]: {
+                ...$allContext[comp_id],
+                group: value,
+              },
+            })
+          : value,
+        color: groupFGColor
+          ? processStringSync(groupFGColor, {
+              ...$allContext,
+              [comp_id]: {
+                ...$allContext[comp_id],
+                group: value,
+              },
+            })
+          : undefined,
+        bgColor: groupBGColor
+          ? processStringSync(groupBGColor, {
+              ...$allContext,
+              [comp_id]: {
+                ...$allContext[comp_id],
+                group: value,
+              },
+            })
+          : undefined,
+        children,
+      };
+    });
   };
 
-  const getGroupChildNodes = (groupValue) => {
-    return $fetch.rows
-      .filter((row) => row[groupField] == groupValue)
-      .map((row, idx) => {
-        return {
-          id: row[idColumn],
-          renderSlot: hasSlot,
-          type: "groupItem",
-          group: groupValue,
-          quiet,
-          row,
-          open: $builderStore.inBuilder && $component.children && idx == 0,
-          icon: nodeIcon,
-          label: labelTemplate
-            ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
-            : row[primaryDisplay],
-          color: nodeFGColor
-            ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
-            : undefined,
-          bgColor: nodeBGColor
-            ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
-            : undefined,
-          children: getChildNodes(row),
-        };
-      });
+  const getGroupChildNodes = (groupValue, groupRows) => {
+    return groupRows.map((row, idx) =>
+      enrichNode(row, idx, {
+        isGroup: true,
+        groupValue,
+        type: "groupItem",
+        children: getChildNodes(row),
+      })
+    );
   };
 
   const getChildNodes = (row, rows) => {
@@ -404,23 +402,14 @@
     if (recursive) {
       rows
         .filter((x) => x[joinField] == row[idColumn])
-        .forEach((row) => {
+        .forEach((row, idx) => {
           children.push({
-            renderSlot: hasSlot,
-            id: row[idColumn],
-            icon: nodeIcon,
-            row,
-            label: labelTemplate
-              ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
-              : row[primaryDisplay],
-            color: nodeFGColor
-              ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
-              : undefined,
-            bgColor: nodeBGColor
-              ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
-              : undefined,
+            ...enrichNode(row, idx, {
+              children: getChildNodes(row, rows),
+              visible: true,
+              type: "node",
+            }),
             quiet,
-            children: getChildNodes(row, rows),
           });
         });
     }
@@ -431,29 +420,26 @@
     if (inBuilder) return;
 
     let row = e.detail.row;
+    let index = $selectedNodes.findIndex((x) => x == e.detail.id);
 
-    let index = $selectedNodes.findIndex((x) => x.id == e.detail.id);
-
-    // If unselecting clear the context
     if (index > -1) row = {};
 
     if (index > -1) {
       $selectedNodes.splice(index, 1);
       $selectedNodes = $selectedNodes;
     } else if ($selectedNodes.length < maxNodeSelection) {
-      $selectedNodes = [...$selectedNodes, e.detail];
+      $selectedNodes = [...$selectedNodes, e.detail.id];
     } else if (maxNodeSelection == 1) {
-      $selectedNodes = [e.detail];
+      $selectedNodes = [e.detail.id];
     } else {
       notificationStore.actions.warning(
         "Cannot select more than " + maxNodeSelection + " items"
       );
     }
     $selectedRows = $fetch?.rows?.filter((row) =>
-      $selectedNodes.find((x) => x.id == row[idColumn])
+      $selectedNodes.find((x) => x == row[idColumn])
     );
 
-    // Enrich the context with the values of the row being selected
     let cmd = enrichButtonActions(onNodeSelect, {
       ...$allContext,
       [comp_id]: {
@@ -473,35 +459,37 @@
     await cmd?.();
   };
 
-  /**
-   *
-   * @param e.detail will contain the onClick event, the row and the group ( if any )
-   *
-   * We enrich our own context with the current row before enriching and
-   * executing the action
-   */
   const handleNodeAction = async (e) => {
     let cmd = enrichButtonActions(e.detail.onClick, {
       ...$allContext,
-      [comp_id]: { ...context, ...e.detail.row, group: e.detail.group },
+      [comp_id]: { ...context, ...e.detail, group: e.detail.group },
     });
+
     await cmd?.();
   };
 
   const handleSearch = (e) => {
-    // For non recursive trees the filtering is done server side
-    if (e.detail) {
-      searchFilter = [
-        {
-          field: labelColumn || primaryDisplay,
-          operator: "fuzzy",
-          value: e.detail,
-          type: "string",
-          valueType: "Value",
-        },
-      ];
+    if ($filtering) return;
+
+    if (searchMode == "client") {
+      if (e.detail) {
+        filterTree(rootNodes, e.detail);
+      } else clearFilter(rootNodes);
+      return;
     } else {
-      searchFilter = [];
+      if (e.detail) {
+        searchFilter = [
+          {
+            field: labelColumn || primaryDisplay,
+            operator: "fuzzy",
+            value: e.detail,
+            type: "string",
+            valueType: "Value",
+          },
+        ];
+      } else {
+        searchFilter = [];
+      }
     }
   };
 
@@ -521,9 +509,6 @@
   $: $component.styles = {
     ...$component.styles,
     normal: {
-      "background-color": quiet
-        ? "transparent"
-        : "var(--spectrum-global-color-gray-50)",
       flex: flex ? "auto" : "none",
       display: "flex",
       overflow: "hidden",
@@ -531,19 +516,95 @@
       ...$component.styles.normal,
     },
   };
+
+  const filterTree = async function (tree, searchLabel) {
+    $filtering = true;
+    await tick();
+
+    function resetVisibility(node) {
+      node.visible = false;
+      node.children.forEach((child) => resetVisibility(child));
+    }
+
+    function applyFilter(node) {
+      const matchesLabel = node.label
+        .toLowerCase()
+        .includes(searchLabel.toLowerCase());
+
+      node.children.forEach((child) => applyFilter(child));
+
+      if (matchesLabel) {
+        node.color = "var(--spectrum-global-color-yellow-400)";
+      } else {
+        node.color = null;
+      }
+
+      const hasVisibleChildren = node.children.some((child) => child.visible);
+      node.visible = matchesLabel || hasVisibleChildren;
+      node.open = matchesLabel || hasVisibleChildren;
+    }
+
+    tree.forEach((root) => {
+      resetVisibility(root);
+      applyFilter(root);
+    });
+
+    $filtering = false;
+    return;
+  };
+
+  async function clearFilter(tree) {
+    function resetNode(node) {
+      node.visible = true;
+      node.open = false;
+      node.color = undefined;
+      node.children.forEach((child) => resetNode(child));
+    }
+
+    tree.forEach((root) => resetNode(root));
+    rootNodes = rootNodes;
+    $selectedNodes = [];
+    return;
+  }
+
+  function getAncestors(tree, nodeId) {
+    function findAncestors(node, targetId, ancestors = []) {
+      if (node.id === targetId) {
+        return ancestors;
+      }
+
+      for (const child of node.children) {
+        const result = findAncestors(child, targetId, [
+          ...ancestors,
+          node.label,
+        ]);
+        if (result) {
+          return result;
+        }
+      }
+
+      return null;
+    }
+
+    for (const rootNode of tree) {
+      if (rootNode.id === nodeId) {
+        return [];
+      }
+
+      const ancestors = findAncestors(rootNode, nodeId);
+      if (ancestors) {
+        return ancestors;
+      }
+    }
+
+    return null;
+  }
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <div use:styleable={$component.styles}>
-  <div
-    bind:clientHeight
-    class="super-tree"
-    class:quiet
-    class:disabled
-    class:nested
-    class:list
-  >
+  <div class="super-tree" class:quiet class:disabled class:nested class:list>
     <Provider {actions} data={context} />
     {#if header && !nested}
       <TreeHeader
@@ -553,13 +614,11 @@
         {headerMenuIcon}
         {quiet}
         {searchable}
-        {collapsible}
         {inBuilder}
         on:search={handleSearch}
       />
     {/if}
-
-    {#if $fetch.loading && !$fetch.loaded}
+    {#if ($fetch.loading && !$fetch.loaded) || $filtering}
       <div class="loader" class:list>
         <div class="animation" />
       </div>
@@ -567,19 +626,21 @@
       <div class="tree">
         {#if rootNodes.length}
           {#if rootless}
-            {#each rootNodes as node, idx (idx)}
-              <Tree
-                {...node}
-                {disabled}
-                {quiet}
-                {list}
-                flat={!recursive}
-                on:nodeSelect={handleNodeSelect}
-                on:nodeClick={handleNodeClick}
-                on:nodeAction={handleNodeAction}
-              >
-                <slot />
-              </Tree>
+            {#each rootNodes as node, idx}
+              {#if node.visible !== false}
+                <Tree
+                  {...node}
+                  {disabled}
+                  {quiet}
+                  {list}
+                  flat={!recursive}
+                  on:nodeSelect={handleNodeSelect}
+                  on:nodeClick={handleNodeClick}
+                  on:nodeAction={handleNodeAction}
+                >
+                  <slot />
+                </Tree>
+              {/if}
             {/each}
           {:else}
             <Tree
@@ -602,18 +663,9 @@
           {/if}
         {:else}
           <div class="tree-node">
-            {#if nested}
-              <div
-                class="tree-node-item disabled"
-                style:padding-left={"1.25rem"}
-              >
-                <span>
-                  {branchName || datasource?.label || $component.name}</span
-                >
-              </div>
-            {:else}
-              <span class="tree-node-item flat disabled">No Records Found</span>
-            {/if}
+            <div class="tree-node-item empty">
+              <span>No Records Found</span>
+            </div>
           </div>
         {/if}
       </div>
@@ -627,12 +679,14 @@
     min-height: 360px;
     width: 240px;
     overflow: hidden;
-    border: 1px solid var(--spectrum-global-color-gray-200);
+    color: var(--spectrum-global-color-gray-700);
     display: flex;
     flex-direction: column;
     position: relative;
+
     &.quiet {
       border-color: transparent;
+      background-color: transparent;
 
       & * .tree-node {
         font-weight: 400;
@@ -655,16 +709,16 @@
     & * .tree-node {
       position: relative;
       width: 100%;
-      line-height: 2rem;
+      line-height: 1.75rem;
+      font-size: 13px;
 
       & > .tree-node-item {
         position: relative;
         display: flex;
         justify-content: flex-start;
-        max-height: 2rem;
+        max-height: 1.75rem;
         overflow: hidden;
         background-color: transparent;
-        color: var(--spectrum-global-color-gray-700);
 
         &.selected {
           background-color: var(--spectrum-global-color-blue-100);
@@ -680,7 +734,7 @@
         }
 
         &:hover:not(.selected):not(.disabled) {
-          background-color: var(--spectrum-global-color-gray-75);
+          background-color: var(--spectrum-global-color-gray-200);
         }
 
         &:hover:not(.disabled),
@@ -700,17 +754,25 @@
         &.rightChevron {
           padding-left: 0.75rem;
         }
+
+        &.empty {
+          color: var(--spectrum-global-color-gray-600);
+          font-style: italic;
+          padding-left: 0.75rem;
+        }
       }
 
       & > .tree {
         position: relative;
         margin-left: 1.25rem;
         display: flex;
+        min-width: 240px;
         flex-direction: column;
         align-items: stretch;
       }
     }
     & > .tree {
+      flex: auto;
       overflow: auto;
       display: flex;
       flex-direction: column;
