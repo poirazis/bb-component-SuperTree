@@ -7,7 +7,7 @@
     "description": "A Tree View component for Budibase",
     "hasChildren": true,
     "showEmptyState": false,
-    "styles": ["size", "background", "border"],
+    "styles": ["size", "padding", "border", "background"],
     "icon": "TreeCollapseAll",
     "actions": [
       { "type": "RefreshDatasource" },
@@ -26,6 +26,11 @@
           {
             "label": "Selected IDs",
             "key": "selectedIds",
+            "type": "array"
+          },
+          {
+            "label": "Selected Path",
+            "key": "selectedPath",
             "type": "array"
           }
         ]
@@ -58,17 +63,31 @@
         "label": "Data"
       },
       {
+        "type": "boolean",
+        "key": "structuredData",
+        "label": "Structured Data"
+      },
+      {
         "type": "field",
         "key": "idColumn",
         "label": "ID Column",
         "defaultValue": "id",
-        "required": true
+        "dependsOn": {
+          "setting": "structuredData",
+          "value": true,
+          "invert": true
+        }
       },
       {
         "type": "field/sortable",
         "key": "sortColumn",
         "label": "Sort By",
-        "resetOn": "datasource"
+        "resetOn": "datasource",
+        "dependsOn": {
+          "setting": "structuredData",
+          "value": true,
+          "invert": true
+        }
       },
       {
         "type": "select",
@@ -77,17 +96,32 @@
         "options": [
           { "label": "Ascending", "value": "ascending" },
           { "label": "Descending", "value": "descending" }
-        ]
+        ],
+        "dependsOn": {
+          "setting": "structuredData",
+          "value": true,
+          "invert": true
+        }
       },
       {
         "type": "filter",
         "key": "filter",
-        "label": "Filter"
+        "label": "Filter",
+        "dependsOn": {
+          "setting": "structuredData",
+          "value": true,
+          "invert": true
+        }
       },
       {
         "type": "number",
         "label": "Limit",
         "key": "limit",
+        "dependsOn": {
+          "setting": "structuredData",
+          "value": true,
+          "invert": true
+        },
         "defaultValue": 50
       },
       {
@@ -119,8 +153,8 @@
         "dependsOn": { "setting": "treeType", "value": "recursive" }
       },
       {
-        "type": "field",
-        "key": "groupField",
+        "type": "multifield",
+        "key": "groupFields",
         "label": "Group By",
         "resetOn": "datasource",
         "dependsOn": { "setting": "treeType", "value": "groupBy" }
@@ -176,12 +210,6 @@
               "value": true,
               "invert": true
             }
-          },
-          {
-            "type": "boolean",
-            "key": "hideWhenEmpty",
-            "label": "Hide When Empty",
-            "defaultValue": false
           }
         ]
       },
@@ -197,10 +225,15 @@
             "label": "Text"
           },
           {
-            "type": "boolean",
-            "key": "searchable",
+            "type": "select",
+            "key": "searchMode",
             "label": "Search",
-            "defaultValue": true
+            "options": [
+              { "label": "Disabled", "value": false },
+              { "label": "Client Side", "value": "client" },
+              { "label": "Server Side", "value": "server" }
+            ],
+            "defaultValue": "client"
           },
           {
             "type": "boolean",
@@ -230,6 +263,11 @@
         "name": "Node Settings",
         "collapsed": true,
         "settings": [
+          {
+            "type": "field",
+            "key": "labelColumn",
+            "label": "Label Column"
+          },
           {
             "type": "text",
             "key": "labelTemplate",
@@ -426,7 +464,7 @@
       {
         "section": true,
         "tag": "style",
-        "name": "Node Settings",
+        "name": "Dynamic Node Styles",
         "settings": [
           {
             "type": "icon",
@@ -435,10 +473,15 @@
           },
           {
             "type": "text",
+            "key": "nodeIconTemplate",
+            "label": "Node Icon",
+            "nested": true
+          },
+          {
+            "type": "text",
             "key": "nodeIconColor",
             "label": "Icon Color",
-            "nested": true,
-            "dependsOn": "nodeIcon"
+            "nested": true
           },
           {
             "type": "text",
@@ -446,6 +489,7 @@
             "label": "Text Color",
             "nested": true
           },
+
           {
             "type": "text",
             "key": "nodeBGColor",
