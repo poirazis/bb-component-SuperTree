@@ -232,7 +232,7 @@
   $: list = controlType == "list";
   $: context = {
     selected: $selectedRows,
-    selectedIds: $selectedNodes,
+    selectedIds: maxNodeSelection == 1 ? $selectedNodes[0] : $selectedNodes,
     selectedPath: $selectedNodes.length
       ? getAncestors(rootNodes, $selectedNodes[0])
       : [],

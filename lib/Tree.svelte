@@ -1,7 +1,6 @@
 <script>
   import { getContext, createEventDispatcher } from "svelte";
-  import SuperPopover from "../../bb_super_components_shared/src/lib/SuperPopover/SuperPopover.svelte";
-  import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
+  import { SuperButton, SuperPopover } from "@poirazis/supercomponents-shared";
   const { Provider, ContextScopes } = getContext("sdk");
   const treeOptions = getContext("superTreeOptions");
   import { slide } from "svelte/transition";
