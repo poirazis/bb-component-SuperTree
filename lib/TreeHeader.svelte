@@ -145,6 +145,7 @@
     justify-content: space-between;
     height: 38px;
     border-bottom: 1px solid transparent;
+    background-color: var(--spectrum-global-color-gray-100);
 
     &.quiet {
       background-color: unset;
@@ -172,17 +173,14 @@
     & > .title {
       align-self: center;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 500;
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
-      opacity: 0.9;
-      padding-left: 0.25rem;
+      padding-left: 0.75rem;
       text-transform: uppercase;
-
-      &:hover {
-        opacity: 1;
-      }
+      letter-spacing: 1.2px;
+      color: var(--spectrum-global-color-gray-800);
     }
   }
   .actionMenu {

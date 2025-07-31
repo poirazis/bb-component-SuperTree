@@ -73,6 +73,7 @@
 
   export let checkboxes;
   export let maxNodeSelection;
+  export let selectedIds;
 
   export let groupMenu;
   export let groupNodeIcon;
@@ -83,13 +84,14 @@
   export let groupFGColor;
   export let groupBGColor;
   export let groupSlot;
+  export let groupCount = true;
 
   export let datasource;
   export let filter = [];
   export let sortColumn;
   export let sortOrder;
   export let limit;
-  export let paginate;
+  export let paginate = true;
   export let labelColumn;
   export let labelTemplate;
   export let structuredData;
@@ -127,6 +129,9 @@
   let defaultQuery;
   let searchFilter;
   let filtering = writable(false);
+
+  let preselectedIds = selectedIds?.split(",") || [];
+  if (preselectedIds.length) selectedNodes.set(preselectedIds);
 
   $: comp_id = $component.id;
   $: inBuilder = $builderStore.inBuilder;
@@ -338,10 +343,23 @@
     const nextLevel = level + 1;
     const isLastLevel = nextLevel >= groupFields.length;
 
-    const groupValues = new Set(rows.map((row) => row[currentField]).sort());
+    // Handle case where the group field is an array, either a relationshiup or a multi-select field
+    const groupValues = new Set(
+      rows.map((row) => {
+        if (Array.isArray(row[currentField])) {
+          return (
+            row[currentField][0]?.primaryDisplay ||
+            row[currentField][0]?._id ||
+            row[currentField][0]
+          );
+        }
+        return row[currentField];
+      })
+    );
 
     return Array.from(groupValues).map((value, idx) => {
-      const groupRows = rows.filter((row) => row[currentField] === value);
+      const groupRows = rows.filter((row) => isChild(row[currentField], value));
+
       const children = isLastLevel
         ? getGroupChildNodes(value, groupRows)
         : buildGroupNodes(groupRows, groupFields, nextLevel);
@@ -349,6 +367,7 @@
       return {
         type: "groupBranch",
         selectable: groupSelectable,
+        showCount: groupCount,
         renderSlot: groupSlot,
         id: `${currentField}-${value}`,
         open: $builderStore.inBuilder && $component.children && idx === 0,
@@ -361,7 +380,9 @@
                 group: value,
               },
             })
-          : value,
+          : Array.isArray(value)
+            ? value.join(", ")
+            : value,
         color: groupFGColor
           ? processStringSync(groupFGColor, {
               ...$allContext,
@@ -415,6 +436,20 @@
     }
     return children;
   };
+
+  function isChild(row, group) {
+    // Check if both are identical
+    if (row == group) return true;
+
+    // Check if both are arrays
+    if (Array.isArray(row)) {
+      return (
+        row[0]?.primaryDisplay == group ||
+        row[0]?._id == group ||
+        row[0] == group
+      );
+    }
+  }
 
   const handleNodeSelect = async (e) => {
     if (inBuilder) return;
@@ -473,6 +508,7 @@
 
     if (searchMode == "client") {
       if (e.detail) {
+        clearFilter(rootNodes);
         filterTree(rootNodes, e.detail);
       } else clearFilter(rootNodes);
       return;
@@ -495,6 +531,8 @@
 
   const resetSelections = () => {
     $selectedNodes = [];
+    let preselectedIds = selectedIds?.split(",") || [];
+    if (preselectedIds.length) selectedNodes.set(preselectedIds);
   };
 
   const getPrimaryDisplay = (definition) => {
@@ -527,16 +565,19 @@
     }
 
     function applyFilter(node) {
-      const matchesLabel = node.label
-        .toLowerCase()
-        .includes(searchLabel.toLowerCase());
+      const labelStr = String(node.label || "").toLowerCase();
+      const searchStr = searchLabel.toLowerCase();
+      const matchesLabel = labelStr.includes(searchStr);
 
       node.children.forEach((child) => applyFilter(child));
 
       if (matchesLabel) {
-        node.color = "var(--spectrum-global-color-yellow-400)";
+        const startIndex = labelStr.indexOf(searchStr);
+        const endIndex = startIndex + searchStr.length;
+        const originalLabel = String(node.label || "");
+        node.label = `${originalLabel.slice(0, startIndex)}<span style="background-color: lime; color: black; border-radius: 2px;">${originalLabel.slice(startIndex, endIndex)}</span>${originalLabel.slice(endIndex)}`;
       } else {
-        node.color = null;
+        node.label = String(node.label || ""); // Reset to original string
       }
 
       const hasVisibleChildren = node.children.some((child) => child.visible);
@@ -549,6 +590,7 @@
       applyFilter(root);
     });
 
+    rootNodes = rootNodes;
     $filtering = false;
     return;
   };
@@ -558,6 +600,10 @@
       node.visible = true;
       node.open = false;
       node.color = undefined;
+      node.label = String(node.label).replace(
+        /<span[^>]*>(.*?)<\/span>/g,
+        "$1"
+      ); // Remove highlight markup
       node.children.forEach((child) => resetNode(child));
     }
 
@@ -677,7 +723,7 @@
   .super-tree {
     flex: auto;
     min-height: 360px;
-    width: 240px;
+    width: 15rem;
     overflow: hidden;
     color: var(--spectrum-global-color-gray-700);
     display: flex;
