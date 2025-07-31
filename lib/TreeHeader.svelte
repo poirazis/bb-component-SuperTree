@@ -1,9 +1,11 @@
 <script>
   import { getContext, createEventDispatcher } from "svelte";
 
-  import CellString from "../../bb_super_components_shared/src/lib/SuperTableCells/CellString.svelte";
-  import SuperPopover from "../../bb_super_components_shared/src/lib/SuperPopover/SuperPopover.svelte";
-  import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
+  import {
+    CellString,
+    SuperPopover,
+    SuperButton,
+  } from "@poirazis/supercomponents-shared";
 
   const { enrichButtonActions } = getContext("sdk");
   const context = getContext("context");
@@ -142,8 +144,8 @@
     align-items: stretch;
     justify-content: space-between;
     height: 38px;
-    color: var(--spectrum-global-color-gray-800);
     border-bottom: 1px solid transparent;
+    background-color: var(--spectrum-global-color-gray-100);
 
     &.quiet {
       background-color: unset;
@@ -160,22 +162,25 @@
 
     &.inEdit {
       border-bottom: 1px solid var(--spectrum-global-color-gray-400);
+      align-items: stretch;
     }
 
     &.filtered {
       border-bottom: 1px solid var(--spectrum-global-color-blue-400);
+      align-items: stretch;
     }
 
     & > .title {
       align-self: center;
       font-size: 12px;
       font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 1.2px;
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
-      padding-left: 0.65rem;
+      padding-left: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--spectrum-global-color-gray-800);
     }
   }
   .actionMenu {

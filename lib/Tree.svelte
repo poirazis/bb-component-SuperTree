@@ -1,7 +1,6 @@
 <script>
   import { getContext, createEventDispatcher } from "svelte";
-  import SuperPopover from "../../bb_super_components_shared/src/lib/SuperPopover/SuperPopover.svelte";
-  import SuperButton from "../../bb_super_components_shared/src/lib/SuperButton/SuperButton.svelte";
+  import { SuperButton, SuperPopover } from "@poirazis/supercomponents-shared";
   const { Provider, ContextScopes } = getContext("sdk");
   const treeOptions = getContext("superTreeOptions");
   import { slide } from "svelte/transition";
@@ -26,6 +25,7 @@
   export let row;
   export let group;
   export let visible;
+  export let showCount;
 
   let openMenu;
   let menuAnchor;
@@ -96,6 +96,10 @@
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+{#if 1 == 4}
+  <div class="highlight" />
+{/if}
+
 {#if visible !== false}
   <div
     class="tree-node"
@@ -105,6 +109,8 @@
     class:groupBranch
     style:background-color={bgColor}
   >
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
       class="tree-node-item"
       class:hasChildren={hasChildren || renderSlot}
@@ -197,7 +203,12 @@
           style="z-index: 1;"
           on:mousedown={selectable ? handleSelect : handleClick}
         >
-          {label || "Not Set"}
+          {@html label ?? "Not Set"}
+          {#if showCount && groupBranch && $treeOptions.groupCount}
+            <span class="group-count">
+              ({children.length})
+            </span>
+          {/if}
         </div>
       </div>
 
@@ -244,6 +255,7 @@
             color={node.color}
             bgColor={node.bgColor}
             group={node.group}
+            showCount={node.showCount}
             {list}
             {accordion}
             visible={node.visible}
@@ -329,6 +341,13 @@
     color: var(--spectrum-global-color-gray-800);
   }
 
+  .group-count {
+    color: var(--spectrum-global-color-gray-600);
+    margin-left: 0.25rem;
+    font-size: smaller;
+    font-family: monospace;
+  }
+
   .action-menu {
     min-width: 160px;
     padding: 0.25rem;
@@ -376,5 +395,10 @@
   }
   .label.selectable:hover {
     cursor: pointer;
+  }
+
+  .highlight {
+    background-color: var(--spectrum-global-color-yellow-400);
+    color: var(--spectrum-global-color-gray-900);
   }
 </style>

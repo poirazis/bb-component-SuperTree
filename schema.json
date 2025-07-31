@@ -156,7 +156,7 @@
         "type": "multifield",
         "key": "groupFields",
         "label": "Group By",
-        "resetOn": "datasource",
+        "resetOn": ["datasource", "treeType"],
         "dependsOn": { "setting": "treeType", "value": "groupBy" }
       },
       {
@@ -307,6 +307,12 @@
             "key": "groupNodeLabel",
             "label": "Group Label",
             "nested": true
+          },
+          {
+            "type": "boolean",
+            "key": "groupCount",
+            "label": "Show Count",
+            "defaultValue": true
           },
           {
             "type": "boolean",
