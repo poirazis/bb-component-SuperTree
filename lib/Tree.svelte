@@ -25,7 +25,6 @@
   export let row;
   export let group;
   export let visible;
-  export let showCount;
 
   let openMenu;
   let menuAnchor;
@@ -38,6 +37,7 @@
   };
 
   $: if (disabled) open = false;
+  $: showCount = $treeOptions.showCount;
   $: groupBranch = type == "groupBranch";
   $: rightChevron = $treeOptions.chevronPosition == "right";
   $: selectable =
@@ -96,10 +96,6 @@
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-{#if 1 == 4}
-  <div class="highlight" />
-{/if}
-
 {#if visible !== false}
   <div
     class="tree-node"
@@ -108,6 +104,11 @@
     class:accordion
     class:groupBranch
     style:background-color={bgColor}
+    on:contextmenu|preventDefault|stopPropagation={(e) => {
+      menuAnchor = e.target;
+      openMenu = !openMenu;
+      $menuStore = openMenu ? id : false;
+    }}
   >
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -204,9 +205,9 @@
           on:mousedown={selectable ? handleSelect : handleClick}
         >
           {@html label ?? "Not Set"}
-          {#if showCount && groupBranch && $treeOptions.groupCount}
-            <span class="group-count">
-              ({children.length})
+          {#if showCount && children?.length}
+            <span class="children-count">
+              ({children?.length})
             </span>
           {/if}
         </div>
@@ -291,11 +292,12 @@
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="action-menu">
-      {#each dropMenuItems as { text, icon, disabled, onClick }}
+      {#each dropMenuItems as { text, icon, disabled, onClick, type }}
         <SuperButton
           size="M"
           {icon}
           {text}
+          {type}
           quiet
           {disabled}
           on:click={() => {
@@ -341,7 +343,7 @@
     color: var(--spectrum-global-color-gray-800);
   }
 
-  .group-count {
+  .children-count {
     color: var(--spectrum-global-color-gray-600);
     margin-left: 0.25rem;
     font-size: smaller;
