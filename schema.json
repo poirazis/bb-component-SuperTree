@@ -187,6 +187,12 @@
         "defaultValue": false
       },
       {
+        "type": "boolean",
+        "key": "showCount",
+        "label": "Show Count",
+        "defaultValue": true
+      },
+      {
         "section": true,
         "name": "Tree Settings",
         "settings": [
@@ -307,12 +313,6 @@
             "key": "groupNodeLabel",
             "label": "Group Label",
             "nested": true
-          },
-          {
-            "type": "boolean",
-            "key": "groupCount",
-            "label": "Show Count",
-            "defaultValue": true
           },
           {
             "type": "boolean",

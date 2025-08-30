@@ -84,7 +84,7 @@
   export let groupFGColor;
   export let groupBGColor;
   export let groupSlot;
-  export let groupCount = true;
+  export let showCount = true;
 
   export let datasource;
   export let filter = [];
@@ -129,6 +129,7 @@
   let defaultQuery;
   let searchFilter;
   let filtering = writable(false);
+  let hasMatches = true;
 
   let preselectedIds = selectedIds?.split(",") || [];
   if (preselectedIds.length) selectedNodes.set(preselectedIds);
@@ -217,6 +218,7 @@
     chevronPosition,
     hasSlot,
     quiet,
+    showCount,
   });
 
   $: definition = $fetch?.definition;
@@ -297,7 +299,7 @@
         : undefined,
       label: labelTemplate
         ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
-        : row[labelColumn || primaryDisplay],
+        : (row[labelColumn || primaryDisplay] ?? "Not Set"),
       color: nodeFGColor
         ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
         : undefined,
@@ -367,7 +369,6 @@
       return {
         type: "groupBranch",
         selectable: groupSelectable,
-        showCount: groupCount,
         renderSlot: groupSlot,
         id: `${currentField}-${value}`,
         open: $builderStore.inBuilder && $component.children && idx === 0,
@@ -497,7 +498,12 @@
   const handleNodeAction = async (e) => {
     let cmd = enrichButtonActions(e.detail.onClick, {
       ...$allContext,
-      [comp_id]: { ...context, ...e.detail, group: e.detail.group },
+      [comp_id]: {
+        ...context,
+        ...e.detail,
+        ...e.detail.row,
+        group: e.detail.group,
+      },
     });
 
     await cmd?.();
@@ -575,7 +581,7 @@
         const startIndex = labelStr.indexOf(searchStr);
         const endIndex = startIndex + searchStr.length;
         const originalLabel = String(node.label || "");
-        node.label = `${originalLabel.slice(0, startIndex)}<span style="background-color: lime; color: black; border-radius: 2px;">${originalLabel.slice(startIndex, endIndex)}</span>${originalLabel.slice(endIndex)}`;
+        node.label = `${originalLabel.slice(0, startIndex)}<span style="padding: 0.15rem 0rem; background-color: rgba(0, 255, 0, 0.7); color: black; border-radius: 2px;">${originalLabel.slice(startIndex, endIndex)}</span>${originalLabel.slice(endIndex)}`;
       } else {
         node.label = String(node.label || ""); // Reset to original string
       }
@@ -590,6 +596,7 @@
       applyFilter(root);
     });
 
+    hasMatches = tree.some((t) => t.visible);
     rootNodes = rootNodes;
     $filtering = false;
     return;
@@ -608,8 +615,8 @@
     }
 
     tree.forEach((root) => resetNode(root));
+    hasMatches = true;
     rootNodes = rootNodes;
-    $selectedNodes = [];
     return;
   }
 
@@ -670,7 +677,7 @@
       </div>
     {:else}
       <div class="tree">
-        {#if rootNodes.length}
+        {#if rootNodes.length && hasMatches}
           {#if rootless}
             {#each rootNodes as node, idx}
               {#if node.visible !== false}
@@ -769,6 +776,9 @@
         &.selected {
           background-color: var(--spectrum-global-color-blue-100);
           color: var(--spectrum-global-color-gray-900);
+          & *.children-count {
+            color: var(--spectrum-global-color-gray-800) !important;
+          }
         }
 
         &.flat {
@@ -786,6 +796,10 @@
         &:hover:not(.disabled),
         &.is-menu-open {
           color: var(--spectrum-global-color-gray-900);
+          & *.children-count {
+            color: var(--spectrum-global-color-gray-800) !important;
+          }
+
           & > .menu-icon {
             visibility: visible;
           }
