@@ -269,7 +269,7 @@
           </svelte:self>
         {/each}
 
-        {#if renderSlot && $treeOptions.hasSlot && (open || children.length == 0)}
+        {#if renderSlot && $treeOptions.hasSlot && (groupBranch || open || children.length == 0)}
           <Provider data={context} scope={ContextScopes.Local}>
             <slot />
           </Provider>
