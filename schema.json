@@ -464,6 +464,20 @@
             "label": "Menu Menu Icon",
             "defaultValue": "ri-more-fill",
             "dependsOn": "nodeMenu"
+          },
+          {
+            "type": "select",
+            "key": "slotPosition",
+            "label": "Slot Position",
+            "defaultValue": "after",
+            "options": [
+              { "label": "Disabled", "value": false },
+              { "label": "In Leaf", "value": "leaf" },
+              { "label": "In Branch", "value": "branch" },
+              { "label": "In Group", "value": "group" },
+              { "label": "After Tree", "value": "after" },
+              { "label": "In All Nodes", "value": "all" }
+            ]
           }
         ]
       },

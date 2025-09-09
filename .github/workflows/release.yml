@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - main
+  workflow_dispatch:
 
 jobs:
   build:
@@ -13,22 +14,11 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v3
-        with:
-          path: ${{ github.workspace }}/bb-component-SuperTree
-      - uses: actions/checkout@v3
-        name: Checkout Super Components Shared code repository
-        with:
-          repository: poirazis/bb_super_components_shared
-          path: ${{ github.workspace }}/bb_super_components_shared
-          ref: develop
       - uses: actions/setup-node@v1
         with:
           node-version: 18
       - name: Make the production plugin bundle
         run: |
-          cd bb_super_components_shared
-          yarn
-          cd ../bb-component-SuperTree
           release_version=$(cat package.json | jq -r '.version')
           echo "RELEASE_VERSION=$release_version" >> $GITHUB_ENV
           yarn
@@ -40,4 +30,4 @@ jobs:
           tag_name: v${{ env.RELEASE_VERSION }}
           generate_release_notes: true
           files: |
-            ${{ github.workspace }}/bb-component-SuperTree/dist/*.tar.gz
+            dist/*.tar.gz

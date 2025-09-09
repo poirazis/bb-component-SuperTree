@@ -102,6 +102,8 @@
   export let flex;
   export let idColumn;
 
+  export let slotPosition = false;
+
   // Events
   export let onNodeSelect;
   export let onNodeClick;
@@ -282,9 +284,32 @@
       visible = true,
     } = options;
 
+    // Determine renderSlot based on slotPosition string value
+    const shouldRenderSlot = (() => {
+      if (!hasSlot) return false;
+      switch (slotPosition) {
+        case false:
+        case "disabled":
+          return false;
+        case "all":
+          return true;
+        case "leaf":
+          return !children || children.length === 0;
+        case "branch":
+          return children && children.length > 0;
+        case "group":
+          return type === "groupBranch";
+        case "after":
+          // Handled elsewhere (e.g., after the tree), so false here
+          return false;
+        default:
+          return false;
+      }
+    })();
+
     return {
       id: row[idColumn] || `${groupValue}`,
-      renderSlot: hasSlot,
+      renderSlot: shouldRenderSlot,
       type,
       group: isGroup ? groupValue : undefined,
       visible,
@@ -366,10 +391,32 @@
         ? getGroupChildNodes(value, groupRows)
         : buildGroupNodes(groupRows, groupFields, nextLevel);
 
+      // Compute renderSlot dynamically (same logic as enrichNode)
+      const shouldRenderSlot = (() => {
+        if (!hasSlot) return false;
+        switch (slotPosition) {
+          case false:
+          case "disabled":
+            return false;
+          case "all":
+            return true;
+          case "leaf":
+            return !children || children.length === 0;
+          case "branch":
+            return children && children.length > 0;
+          case "group":
+            return true; // Since this is a groupBranch
+          case "after":
+            return false;
+          default:
+            return false;
+        }
+      })();
+
       return {
         type: "groupBranch",
         selectable: groupSelectable,
-        renderSlot: groupSlot,
+        renderSlot: shouldRenderSlot, // Now dynamic, based on slotPosition
         id: `${currentField}-${value}`,
         open: $builderStore.inBuilder && $component.children && idx === 0,
         icon: groupNodeIcon,
@@ -556,7 +603,6 @@
       flex: flex ? "auto" : "none",
       display: "flex",
       overflow: "hidden",
-      height: nested ? "auto" : "360",
       ...$component.styles.normal,
     },
   };
@@ -581,7 +627,7 @@
         const startIndex = labelStr.indexOf(searchStr);
         const endIndex = startIndex + searchStr.length;
         const originalLabel = String(node.label || "");
-        node.label = `${originalLabel.slice(0, startIndex)}<span style="padding: 0.15rem 0rem; background-color: rgba(0, 255, 0, 0.7); color: black; border-radius: 2px;">${originalLabel.slice(startIndex, endIndex)}</span>${originalLabel.slice(endIndex)}`;
+        node.label = `${originalLabel.slice(0, startIndex)}<span style="font-weight: 600;  padding: 0.1rem 0rem; background-color: rgba(0, 255, 0, 0.5); color: black; border-radius: 2px;">${originalLabel.slice(startIndex, endIndex)}</span>${originalLabel.slice(endIndex)}`;
       } else {
         node.label = String(node.label || ""); // Reset to original string
       }
@@ -657,7 +703,14 @@
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <div use:styleable={$component.styles}>
-  <div class="super-tree" class:quiet class:disabled class:nested class:list>
+  <div
+    class="super-tree"
+    class:quiet
+    class:disabled
+    class:nested
+    class:list
+    class:rootless={!rootless}
+  >
     <Provider {actions} data={context} />
     {#if header && !nested}
       <TreeHeader
@@ -721,6 +774,10 @@
             </div>
           </div>
         {/if}
+
+        {#if slotPosition == "after" && $component.children}
+          <slot />
+        {/if}
       </div>
     {/if}
   </div>
@@ -736,6 +793,7 @@
     display: flex;
     flex-direction: column;
     position: relative;
+    border: 1px solid var(--spectrum-global-color-gray-300);
 
     &.quiet {
       border-color: transparent;
@@ -772,6 +830,7 @@
         max-height: 1.75rem;
         overflow: hidden;
         background-color: transparent;
+        border-radius: 0.25rem;
 
         &.selected {
           background-color: var(--spectrum-global-color-blue-100);
@@ -826,7 +885,7 @@
         position: relative;
         margin-left: 1.25rem;
         display: flex;
-        min-width: 240px;
+        min-width: 200px;
         flex-direction: column;
         align-items: stretch;
       }
@@ -879,6 +938,10 @@
           margin-left: 1rem;
         }
       }
+    }
+
+    &.rootless {
+      min-height: unset;
     }
   }
 
