@@ -1,6 +1,6 @@
 {
   "name": "bb-component-SuperTree",
-  "version": "1.3.2",
+  "version": "1.3.0",
   "description": "A Tree View / Tree List component for Budibase",
   "license": "MIT",
   "svelte": "index.js",

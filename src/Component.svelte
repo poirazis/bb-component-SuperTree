@@ -126,7 +126,7 @@
   let rootNodes = [];
   let selectedNodes = new writable([]);
   let selectedRows = new writable([]);
-  let menuStore = new writable({});
+  let menuStore = new writable(null);
   let query = {};
   let defaultQuery;
   let searchFilter;
@@ -240,6 +240,7 @@
 
   $: list = controlType == "list";
   $: context = {
+    menuRowId: $menuStore,
     selected: $selectedRows,
     selectedIds: maxNodeSelection == 1 ? $selectedNodes[0] : $selectedNodes,
     selectedPath: $selectedNodes.length
@@ -603,6 +604,7 @@
       flex: flex ? "auto" : "none",
       display: "flex",
       overflow: "hidden",
+      height: nested ? "auto" : "360px",
       ...$component.styles.normal,
     },
   };

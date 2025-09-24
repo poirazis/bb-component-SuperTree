@@ -308,7 +308,9 @@
               row,
               group: groupBranch ? label : group,
             });
-            $menuStore = undefined;
+            setTimeout(() => {
+              $menuStore = undefined;
+            }, 100);
             openMenu = false;
           }}
           menuItem
