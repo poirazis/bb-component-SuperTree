@@ -789,13 +789,13 @@
   .super-tree {
     flex: auto;
     min-height: 360px;
-    width: 15rem;
+    width: 14rem;
     overflow: hidden;
     color: var(--spectrum-global-color-gray-700);
     display: flex;
     flex-direction: column;
     position: relative;
-    border: 1px solid var(--spectrum-global-color-gray-300);
+    border: 1px solid var(--spectrum-global-color-gray-200);
 
     &.quiet {
       border-color: transparent;
