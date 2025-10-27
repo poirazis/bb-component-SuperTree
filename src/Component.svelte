@@ -596,19 +596,6 @@
     }
   };
 
-  setContext("superTreeOptions", treeOptions);
-
-  $: $component.styles = {
-    ...$component.styles,
-    normal: {
-      flex: flex ? "auto" : "none",
-      display: "flex",
-      overflow: "hidden",
-      height: nested ? "auto" : "360px",
-      ...$component.styles.normal,
-    },
-  };
-
   const filterTree = async function (tree, searchLabel) {
     $filtering = true;
     await tick();
@@ -700,94 +687,106 @@
 
     return null;
   }
+
+  setContext("superTreeOptions", treeOptions);
+
+  $: $component.styles = {
+    ...$component.styles,
+    normal: {
+      flex: flex ? "auto" : "none",
+      display: "flex",
+      overflow: "hidden",
+      height: "360px",
+      ...$component.styles.normal,
+    },
+  };
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-click-events-have-key-events -->
-<div use:styleable={$component.styles}>
-  <div
-    class="super-tree"
-    class:quiet
-    class:disabled
-    class:nested
-    class:list
-    class:rootless={!rootless}
-  >
-    <Provider {actions} data={context} />
-    {#if header && !nested}
-      <TreeHeader
-        headerText={headerText || datasource?.label}
-        {headerButtons}
-        {headerDropMenuItems}
-        {headerMenuIcon}
-        {quiet}
-        {searchable}
-        {inBuilder}
-        on:search={handleSearch}
-      />
-    {/if}
-    {#if ($fetch.loading && !$fetch.loaded) || $filtering}
-      <div class="loader" class:list>
-        <div class="animation" />
-      </div>
-    {:else}
-      <div class="tree">
-        {#if rootNodes.length && hasMatches}
-          {#if rootless}
-            {#each rootNodes as node, idx}
-              {#if node.visible !== false}
-                <Tree
-                  {...node}
-                  {disabled}
-                  {quiet}
-                  {list}
-                  flat={!recursive}
-                  on:nodeSelect={handleNodeSelect}
-                  on:nodeClick={handleNodeClick}
-                  on:nodeAction={handleNodeAction}
-                >
-                  <slot />
-                </Tree>
-              {/if}
-            {/each}
-          {:else}
-            <Tree
-              id={"tree-root"}
-              {disabled}
-              hasSlot={$component.children}
-              renderSlot={false}
-              label={branchName || datasource?.label || $component.name}
-              children={rootNodes}
-              open={!collapsed}
-              {quiet}
-              {list}
-              flat={!recursive}
-              on:nodeSelect={handleNodeSelect}
-              on:nodeClick={handleNodeClick}
-              on:nodeAction={handleNodeAction}
-            >
-              <slot />
-            </Tree>
-          {/if}
+<div
+  class="super-tree"
+  class:quiet
+  class:disabled
+  class:nested
+  class:list
+  class:with-header={header && !nested}
+  class:rootless={!rootless}
+  use:styleable={$component.styles}
+>
+  <Provider {actions} data={context} />
+  {#if header && !nested}
+    <TreeHeader
+      headerText={headerText || datasource?.label}
+      {headerButtons}
+      {headerDropMenuItems}
+      {headerMenuIcon}
+      {quiet}
+      {searchable}
+      {inBuilder}
+      on:search={handleSearch}
+    />
+  {/if}
+  {#if ($fetch.loading && !$fetch.loaded) || $filtering}
+    <div class="loader" class:list>
+      <div class="animation" />
+    </div>
+  {:else}
+    <div class="tree">
+      {#if rootNodes.length && hasMatches}
+        {#if rootless}
+          {#each rootNodes as node, idx}
+            {#if node.visible !== false}
+              <Tree
+                {...node}
+                {disabled}
+                {quiet}
+                {list}
+                flat={!recursive}
+                on:nodeSelect={handleNodeSelect}
+                on:nodeClick={handleNodeClick}
+                on:nodeAction={handleNodeAction}
+              >
+                <slot />
+              </Tree>
+            {/if}
+          {/each}
         {:else}
-          <div class="tree-node">
-            <div class="tree-node-item empty">
-              <span>No Records Found</span>
-            </div>
+          <Tree
+            id={"tree-root"}
+            {disabled}
+            hasSlot={$component.children}
+            renderSlot={false}
+            label={branchName || datasource?.label || $component.name}
+            children={rootNodes}
+            open={!collapsed}
+            {quiet}
+            {list}
+            flat={!recursive}
+            on:nodeSelect={handleNodeSelect}
+            on:nodeClick={handleNodeClick}
+            on:nodeAction={handleNodeAction}
+          >
+            <slot />
+          </Tree>
+        {/if}
+      {:else}
+        <div class="tree-node">
+          <div class="tree-node-item empty">
+            <span>No Records Found</span>
           </div>
-        {/if}
+        </div>
+      {/if}
 
-        {#if slotPosition == "after" && $component.children}
-          <slot />
-        {/if}
-      </div>
-    {/if}
-  </div>
+      {#if slotPosition == "after" && $component.children}
+        <slot />
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
   .super-tree {
-    flex: auto;
     min-height: 360px;
     width: 14rem;
     overflow: hidden;
@@ -796,10 +795,15 @@
     flex-direction: column;
     position: relative;
     border: 1px solid var(--spectrum-global-color-gray-200);
+    background-color: var(--spectrum-global-color-gray-100);
+    --selected-bg: var(--spectrum-global-color-gray-300);
+    --hover-bg: var(--spectrum-global-color-gray-200);
 
     &.quiet {
       border-color: transparent;
       background-color: transparent;
+      --selected-bg: var(--spectrum-global-color-gray-200);
+      --hover-bg: var(--spectrum-global-color-gray-100);
 
       & * .tree-node {
         font-weight: 400;
@@ -817,13 +821,17 @@
       height: auto;
       border: unset;
       min-height: unset;
+      flex: unset;
     }
 
     & * .tree-node {
       position: relative;
       width: 100%;
       line-height: 1.75rem;
-      font-size: 13px;
+      background: unset;
+      padding: unset;
+      border: unset;
+      color: var(--spectrum-global-color-gray-700);
 
       & > .tree-node-item {
         position: relative;
@@ -835,28 +843,26 @@
         border-radius: 0.25rem;
 
         &.selected {
-          background-color: var(--spectrum-global-color-blue-100);
-          color: var(--spectrum-global-color-gray-900);
+          background-color: var(--selected-bg);
+          color: var(--spectrum-global-color-gray-800) !important;
           & *.children-count {
             color: var(--spectrum-global-color-gray-800) !important;
           }
-        }
-
-        &.flat {
-          padding-left: 0.5rem;
         }
 
         &.hasChildren:not(.disabled) {
           cursor: pointer;
         }
 
-        &:hover:not(.selected):not(.disabled) {
-          background-color: var(--spectrum-global-color-gray-200);
+        &:hover:not(.selected):not(.disabled):not(.is-menu-open) {
+          background-color: var(--hover-bg);
+          color: var(--spectrum-global-color-gray-800);
         }
 
         &:hover:not(.disabled),
         &.is-menu-open {
-          color: var(--spectrum-global-color-gray-900);
+          color: var(--spectrum-global-color-gray-700);
+          background-color: var(--selected-bg);
           & *.children-count {
             color: var(--spectrum-global-color-gray-800) !important;
           }
@@ -869,11 +875,15 @@
         & > .menu-icon {
           visibility: hidden;
           cursor: pointer;
-          color: var(--spectrum-global-color-gray-600);
+          color: var(--spectrum-global-color-gray-700);
         }
 
         &.rightChevron {
           padding-left: 0.75rem;
+
+          &.hasDropMenu {
+            padding-left: 0.25rem !important;
+          }
         }
 
         &.empty {
@@ -906,7 +916,7 @@
 
     &.list {
       & > .tree {
-        gap: 0.5rem;
+        gap: 0.25rem;
         padding: 0.5rem;
       }
 

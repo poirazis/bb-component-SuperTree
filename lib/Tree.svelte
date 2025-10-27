@@ -17,7 +17,6 @@
   export let list;
   export let type;
   export let icon;
-  export let accordion;
   export let color;
   export let bgColor;
   export let iconColor;
@@ -71,7 +70,7 @@
   const handleClick = (e) => {
     if (disabled) return;
 
-    if (children?.length || renderSlot || accordion) {
+    if (children?.length || renderSlot) {
       open = !open;
       return;
     }
@@ -97,11 +96,10 @@
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 {#if visible !== false}
-  <div
+  <button
     class="tree-node"
     class:is-disabled={disabled}
     class:is-open={open}
-    class:accordion
     class:groupBranch
     style:background-color={bgColor}
     on:contextmenu|preventDefault|stopPropagation={(e) => {
@@ -119,14 +117,10 @@
       class:hasButtons
       class:hasCheckbox={hasCheboxes}
       class:rightChevron
-      class:accordion
       style:color
       class:selected
       class:disabled
       class:is-menu-open={openMenu}
-      style:background-color={openMenu && !selected
-        ? "var(--spectrum-global-color-gray-100)"
-        : bgColor}
       on:click|self={handleClick}
     >
       {#if !rightChevron}
@@ -190,7 +184,7 @@
             quiet
             selected={$menuStore == id}
             on:click={(e) => {
-              menuAnchor = e.detail;
+              menuAnchor = e.target;
               openMenu = !openMenu;
               $menuStore = openMenu ? id : false;
             }}
@@ -227,7 +221,7 @@
 
       {#if hasChildren && $treeOptions.chevronPosition == "right"}
         <i
-          class="ri-arrow-right-s-line chevron accordion"
+          class="ri-arrow-right-s-line chevron"
           on:mousedown={handleClick}
           class:open
         >
@@ -258,7 +252,6 @@
             group={node.group}
             showCount={node.showCount}
             {list}
-            {accordion}
             visible={node.visible}
             row={node.row}
             on:nodeSelect
@@ -276,7 +269,7 @@
         {/if}
       </div>
     {/if}
-  </div>
+  </button>
 {/if}
 
 {#if hasDropMenu && openMenu}
@@ -300,7 +293,7 @@
           {type}
           quiet
           {disabled}
-          on:click={() => {
+          onClick={() => {
             dispatch("nodeAction", {
               onClick,
               id,
@@ -336,10 +329,6 @@
     color: var(--spectrum-global-color-gray-600);
   }
 
-  .chevron.accordion {
-    color: var(--spectrum-global-color-gray-600);
-    font-size: 18px;
-  }
   .chevron.open {
     transform: rotate(90deg);
     color: var(--spectrum-global-color-gray-800);

@@ -71,12 +71,8 @@
         "type": "field",
         "key": "idColumn",
         "label": "ID Column",
-        "defaultValue": "id",
-        "dependsOn": {
-          "setting": "structuredData",
-          "value": true,
-          "invert": true
-        }
+        "defaultValue": "_id",
+        "resetOn": "datasource"
       },
       {
         "type": "field/sortable",
@@ -443,11 +439,6 @@
             "defaultValue": "left",
             "resetOn": "controlType",
             "label": "Chevron",
-            "dependsOn": {
-              "setting": "controlType",
-              "value": "accordion",
-              "invert": true
-            },
             "options": [
               { "label": "Left", "value": "left" },
               { "label": "Right", "value": "right" }

@@ -34,7 +34,7 @@
     padding: "0.5rem",
     debounce: 500,
     clearValueIcon: true,
-    role: "inlineInput",
+    role: "formInput",
     readonly: inBuilder,
   };
 
@@ -63,9 +63,8 @@
   class="searchHeader"
   class:list={!quiet}
   class:quiet
-  class:inEdit
+  class:inEdit={inEdit || hover}
   class:searchable
-  class:filtered={searchFilter}
   on:mouseleave={() => (hover = false)}
 >
   {#if (searchable && hover && !disabled) || searchFilter || inEdit}
@@ -139,11 +138,10 @@
 <style>
   .searchHeader {
     flex: none;
-    width: 100%;
     display: flex;
-    align-items: stretch;
+    align-items: center;
     justify-content: space-between;
-    height: 38px;
+    height: 2.4rem;
     border-bottom: 1px solid transparent;
     background-color: var(--spectrum-global-color-gray-100);
 
@@ -160,27 +158,22 @@
       }
     }
 
-    &.inEdit {
-      border-bottom: 1px solid var(--spectrum-global-color-gray-400);
+    &.inEdit:not(.quiet) {
       align-items: stretch;
-    }
-
-    &.filtered {
-      border-bottom: 1px solid var(--spectrum-global-color-blue-400);
-      align-items: stretch;
+      padding: 0.25rem;
     }
 
     & > .title {
       align-self: center;
       font-size: 12px;
-      font-weight: 500;
+      font-weight: 600;
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
       padding-left: 0.75rem;
       text-transform: uppercase;
-      letter-spacing: 1.2px;
-      color: var(--spectrum-global-color-gray-800);
+      letter-spacing: 1.1px;
+      opacity: 0.9;
     }
   }
   .actionMenu {
