@@ -120,7 +120,6 @@
     class="tree-node"
     class:is-disabled={disabled}
     class:is-open={open}
-    class:groupBranch
     style:background-color={bgColor}
     on:contextmenu|preventDefault|stopPropagation={(e) => {
       menuAnchor = e.target;
@@ -340,7 +339,7 @@
 
   .chevron {
     transition: all 130ms;
-    color: var(--spectrum-global-color-gray-600);
+    color: var(--spectrum-global-color-gray-700);
   }
   .chevron.open {
     transform: rotate(90deg);

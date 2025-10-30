@@ -753,7 +753,7 @@
               {disabled}
               {quiet}
               {list}
-              flat={!recursive}
+              flat={!recursive && !groupFields?.length}
               on:nodeSelect={handleNodeSelect}
               on:nodeClick={handleNodeClick}
               on:nodeAction={handleNodeAction}
@@ -906,7 +906,7 @@
 
       & > .tree {
         position: relative;
-        margin-left: 1.5rem;
+        margin-left: 1rem;
         display: flex;
         min-width: 190px;
         flex-direction: column;

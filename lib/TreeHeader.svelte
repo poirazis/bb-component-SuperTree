@@ -144,6 +144,7 @@
     height: 2.4rem;
     border-bottom: 1px solid transparent;
     background-color: var(--spectrum-global-color-gray-100);
+    color: var(--spectrum-global-color-gray-800);
 
     &.quiet {
       background-color: unset;
@@ -165,8 +166,8 @@
 
     & > .title {
       align-self: center;
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 13px;
+      font-weight: 500;
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
