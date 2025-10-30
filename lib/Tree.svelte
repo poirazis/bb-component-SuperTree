@@ -33,8 +33,10 @@
     id,
     label,
     children,
+    group: groupBranch ? label : group,
   };
 
+  $: isRoot = id == "tree-root";
   $: if (disabled) open = false;
   $: showCount = $treeOptions.showCount;
   $: groupBranch = type == "groupBranch";
@@ -51,27 +53,45 @@
   $: selected = $selectionStore.findIndex((x) => x == id) > -1;
 
   $: hasChildren = children?.length;
-  $: hasButtons = buttons?.length;
+  $: hasButtons = !isRoot && buttons?.length;
 
   $: buttons = groupBranch
     ? $treeOptions.groupButtons
-    : $treeOptions.nodeButtons;
+    : isRoot
+      ? $treeOptions.rootButtons
+      : $treeOptions.nodeButtons;
 
   $: hasDropMenu = groupBranch
     ? $treeOptions.groupMenuDropItems?.length
-    : $treeOptions.nodeMenuDropItems?.length;
+    : isRoot
+      ? $treeOptions.rootButtons?.length
+      : $treeOptions.nodeMenuDropItems?.length;
 
   $: dropMenuItems = groupBranch
     ? $treeOptions.groupMenuDropItems
-    : $treeOptions.nodeMenuDropItems;
+    : isRoot
+      ? $treeOptions.rootButtons
+      : $treeOptions.nodeMenuDropItems;
 
   $: hasCheboxes = $treeOptions.checkboxes && selectable;
+
+  function hasSelectedDescendant(children) {
+    if (!children) return false;
+    for (let child of children) {
+      if ($selectionStore.includes(child.id)) return true;
+      if (child.children && hasSelectedDescendant(child.children)) return true;
+    }
+    return false;
+  }
 
   const handleClick = (e) => {
     if (disabled) return;
 
     if (children?.length || renderSlot) {
-      open = !open;
+      // Prevent collapsing if any descendant is selected
+      if (!hasSelectedDescendant(children)) {
+        open = !open;
+      }
       return;
     }
 
@@ -126,11 +146,12 @@
       {#if !rightChevron}
         <div
           class="control-content"
-          class:flat={flat && !hasChildren && !renderSlot}
+          class:flat={flat && !hasChildren && !renderSlot && !isRoot}
         >
           {#if (hasChildren || renderSlot) && $treeOptions.chevronPosition == "left"}
             <i
-              class="ri-arrow-right-s-line chevron"
+              class="ph ph-caret-right chevron"
+              class:locked={hasSelectedDescendant(children, $selectionStore)}
               class:open
               on:click={handleClick}
             >
@@ -144,12 +165,12 @@
           {#if selected}
             <i
               on:click|preventDefault|stopPropagation={handleSelect}
-              class="ri-checkbox-fill checkbox"
+              class="ph ph-check-square"
             />
           {:else}
             <i
               on:click|preventDefault|stopPropagation={handleSelect}
-              class="ri-checkbox-blank-line checkbox"
+              class="ph ph-square"
             />
           {/if}
         {/if}
@@ -174,7 +195,7 @@
           {/each}
         {/if}
         {#if icon}
-          <i class={icon} class:icon style:color={iconColor} />
+          <i class={"ph ph-" + icon} class:icon style:color={iconColor} />
         {/if}
         {#if hasDropMenu && rightChevron}
           <SuperButton
@@ -183,7 +204,7 @@
             fillOnHover
             quiet
             selected={$menuStore == id}
-            on:click={(e) => {
+            onClick={(e) => {
               menuAnchor = e.target;
               openMenu = !openMenu;
               $menuStore = openMenu ? id : false;
@@ -199,9 +220,9 @@
           on:mousedown={selectable ? handleSelect : handleClick}
         >
           {@html label ?? "Not Set"}
-          {#if showCount && children?.length}
+          {#if showCount && (isRoot || hasChildren)}
             <span class="children-count">
-              ({children?.length})
+              ({children?.filter((n) => n.visible)?.length})
             </span>
           {/if}
         </div>
@@ -237,23 +258,11 @@
       >
         {#each children as node}
           <svelte:self
-            id={node.id}
+            {...node}
             {hasSlot}
-            renderSlot={node.renderSlot}
-            label={node.label}
-            children={node.children}
-            quiet={node.quiet}
-            open={node.open}
-            type={node.type}
-            icon={node.icon}
-            iconColor={node.iconColor}
-            color={node.color}
-            bgColor={node.bgColor}
-            group={node.group}
-            showCount={node.showCount}
             {list}
-            visible={node.visible}
-            row={node.row}
+            {flat}
+            {disabled}
             on:nodeSelect
             on:nodeClick
             on:nodeAction
@@ -262,7 +271,7 @@
           </svelte:self>
         {/each}
 
-        {#if renderSlot && $treeOptions.hasSlot && (groupBranch || open || children.length == 0)}
+        {#if renderSlot && $treeOptions.hasSlot}
           <Provider data={context} scope={ContextScopes.Local}>
             <slot />
           </Provider>
@@ -329,9 +338,18 @@
     color: var(--spectrum-global-color-gray-600);
   }
 
+  .chevron {
+    transition: all 130ms;
+    color: var(--spectrum-global-color-gray-600);
+  }
   .chevron.open {
     transform: rotate(90deg);
     color: var(--spectrum-global-color-gray-800);
+  }
+
+  .chevron.locked {
+    opacity: 0.5;
+    pointer-events: none;
   }
 
   .children-count {
@@ -362,22 +380,14 @@
   }
 
   .control-content {
-    min-width: 1.4rem;
+    min-width: 1.75rem;
     display: flex;
+    padding-left: 0.25rem;
+    align-items: center;
     justify-content: center;
 
     &.flat {
-      min-width: 0.75rem;
-    }
-
-    & > .chevron {
-      transition: all 130ms;
-      font-size: 16px;
-      color: var(--spectrum-global-color-gray-600);
-
-      &.open {
-        color: var(--spectrum-global-color-gray-800);
-      }
+      min-width: 1rem;
     }
   }
 

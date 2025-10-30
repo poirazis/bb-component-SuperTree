@@ -170,7 +170,7 @@
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
-      padding-left: 0.75rem;
+      padding-left: 1rem;
       text-transform: uppercase;
       letter-spacing: 1.1px;
       opacity: 0.9;

@@ -41,13 +41,19 @@
         ]
       },
       {
-        "scope": "local",
-        "type": "schema"
-      },
-      {
         "type": "static",
         "scope": "local",
         "values": [
+          {
+            "label": "Node ID",
+            "key": "id",
+            "type": "string"
+          },
+          {
+            "label": "Node Label",
+            "key": "label",
+            "type": "string"
+          },
           {
             "label": "Node Children",
             "key": "children",
@@ -163,7 +169,7 @@
       {
         "type": "boolean",
         "key": "rootless",
-        "label": "Rootless",
+        "label": "No Root",
         "defaultValue": true
       },
       {
@@ -180,7 +186,7 @@
         "barStyle": "buttons",
         "barIcon": "SelectBox",
         "barTitle": "Select Rows",
-        "defaultValue": false
+        "defaultValue": true
       },
       {
         "type": "boolean",
@@ -190,17 +196,28 @@
       },
       {
         "section": true,
-        "name": "Tree Settings",
+        "name": "Root Settings",
+        "dependsOn": {
+          "setting": "rootless",
+          "value": false
+        },
         "settings": [
           {
             "type": "text",
-            "key": "branchName",
+            "key": "rootNodeName",
             "label": "Root Node Text",
             "dependsOn": {
               "setting": "rootless",
               "value": true,
               "invert": true
             }
+          },
+          {
+            "type": "buttonConfiguration",
+            "key": "rootButtons",
+            "label": "Menu",
+            "nested": true,
+            "wide": true
           },
           {
             "type": "boolean",
@@ -450,7 +467,7 @@
             "label": "Quiet"
           },
           {
-            "type": "icon",
+            "type": "phosphorIcon",
             "key": "nodeMenuIcon",
             "label": "Menu Icon",
             "defaultValue": "ri-more-fill",
@@ -478,7 +495,7 @@
         "name": "Dynamic Node Styles",
         "settings": [
           {
-            "type": "icon",
+            "type": "phosphorIcon",
             "key": "nodeIcon",
             "label": "Node Icon"
           },
@@ -516,7 +533,7 @@
         "dependsOn": { "setting": "treeType", "value": "groupBy" },
         "settings": [
           {
-            "type": "icon",
+            "type": "phosphorIcon",
             "key": "groupNodeIcon",
             "label": "Icon"
           },

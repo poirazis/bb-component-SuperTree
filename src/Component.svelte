@@ -21,6 +21,7 @@
 
   const component = getContext("component");
   const parentTree = getContext("superTreeOptions");
+  const parentFilter = getContext("superTreeFilter");
   const allContext = getContext("context");
 
   const lookupComponent = (components, id) => {
@@ -42,7 +43,7 @@
 
   const nested = parent?._component == "plugin/bb-component-SuperTree";
 
-  export let branchName;
+  export let rootNodeName;
   export let controlType = "tree";
   export let treeType = "flat";
   export let chevronPosition = "left";
@@ -52,6 +53,7 @@
   export let searchMode;
   export let disabled;
   export let rootless;
+  export let rootButtons;
 
   export let header;
   export let headerText;
@@ -66,7 +68,7 @@
   export let nodeMenuIcon = "ri-more-fill";
   export let nodeShowButtons;
   export let nodeMenuItems = [];
-  export let nodeSelection;
+  export let nodeSelection = true;
   export let nodeFGColor;
   export let nodeBGColor;
   export let nodeIconColor;
@@ -131,7 +133,8 @@
   let defaultQuery;
   let searchFilter;
   let filtering = writable(false);
-  let hasMatches = true;
+  let treeFilter = writable(null);
+  let hasMatches = false;
 
   let preselectedIds = selectedIds?.split(",") || [];
   if (preselectedIds.length) selectedNodes.set(preselectedIds);
@@ -201,6 +204,7 @@
   $: treeOptions.set({
     ...$$props,
     treeType,
+    rootButtons,
     nodeIcon,
     nodeSelection,
     groupSelectable,
@@ -230,6 +234,7 @@
   $: primaryDisplay = getPrimaryDisplay(definition);
 
   $: buildTree($fetch?.rows, $treeOptions);
+  $: handleSearch({ detail: $parentFilter });
 
   $: actions = [
     {
@@ -419,6 +424,7 @@
         selectable: groupSelectable,
         renderSlot: shouldRenderSlot, // Now dynamic, based on slotPosition
         id: `${currentField}-${value}`,
+        visible: true,
         open: $builderStore.inBuilder && $component.children && idx === 0,
         icon: groupNodeIcon,
         label: groupNodeLabel
@@ -431,7 +437,7 @@
             })
           : Array.isArray(value)
             ? value.join(", ")
-            : value,
+            : value || "Not Set",
         color: groupFGColor
           ? processStringSync(groupFGColor, {
               ...$allContext,
@@ -560,6 +566,10 @@
   const handleSearch = (e) => {
     if ($filtering) return;
 
+    $treeFilter = e.detail;
+    $selectedNodes = [];
+    $selectedRows = [];
+
     if (searchMode == "client") {
       if (e.detail) {
         clearFilter(rootNodes);
@@ -616,7 +626,7 @@
         const startIndex = labelStr.indexOf(searchStr);
         const endIndex = startIndex + searchStr.length;
         const originalLabel = String(node.label || "");
-        node.label = `${originalLabel.slice(0, startIndex)}<span style="font-weight: 600;  padding: 0.1rem 0rem; background-color: rgba(0, 255, 0, 0.5); color: black; border-radius: 2px;">${originalLabel.slice(startIndex, endIndex)}</span>${originalLabel.slice(endIndex)}`;
+        node.label = `${originalLabel.slice(0, startIndex)}<span style="font-size: bigger;  padding: 0.1rem 0rem; background-color: var(--highlighter-bg); border-radius: 2px;">${originalLabel.slice(startIndex, endIndex)}</span>${originalLabel.slice(endIndex)}`;
       } else {
         node.label = String(node.label || ""); // Reset to original string
       }
@@ -650,7 +660,7 @@
     }
 
     tree.forEach((root) => resetNode(root));
-    hasMatches = true;
+    hasMatches = false;
     rootNodes = rootNodes;
     return;
   }
@@ -689,14 +699,13 @@
   }
 
   setContext("superTreeOptions", treeOptions);
+  setContext("superTreeFilter", treeFilter);
 
   $: $component.styles = {
     ...$component.styles,
     normal: {
-      flex: flex ? "auto" : "none",
       display: "flex",
       overflow: "hidden",
-      height: "360px",
       ...$component.styles.normal,
     },
   };
@@ -706,6 +715,7 @@
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <div
   class="super-tree"
+  class:flex
   class:quiet
   class:disabled
   class:nested
@@ -715,6 +725,7 @@
   use:styleable={$component.styles}
 >
   <Provider {actions} data={context} />
+
   {#if header && !nested}
     <TreeHeader
       headerText={headerText || datasource?.label}
@@ -727,55 +738,52 @@
       on:search={handleSearch}
     />
   {/if}
-  {#if ($fetch.loading && !$fetch.loaded) || $filtering}
+
+  {#if $fetch.loading && !$fetch.loaded}
     <div class="loader" class:list>
       <div class="animation" />
     </div>
   {:else}
     <div class="tree">
-      {#if rootNodes.length && hasMatches}
-        {#if rootless}
+      {#if rootless}
+        {#if rootNodes.some((node) => node.visible)}
           {#each rootNodes as node, idx}
-            {#if node.visible !== false}
-              <Tree
-                {...node}
-                {disabled}
-                {quiet}
-                {list}
-                flat={!recursive}
-                on:nodeSelect={handleNodeSelect}
-                on:nodeClick={handleNodeClick}
-                on:nodeAction={handleNodeAction}
-              >
-                <slot />
-              </Tree>
-            {/if}
+            <Tree
+              {...node}
+              {disabled}
+              {quiet}
+              {list}
+              flat={!recursive}
+              on:nodeSelect={handleNodeSelect}
+              on:nodeClick={handleNodeClick}
+              on:nodeAction={handleNodeAction}
+            >
+              <slot />
+            </Tree>
           {/each}
         {:else}
-          <Tree
-            id={"tree-root"}
-            {disabled}
-            hasSlot={$component.children}
-            renderSlot={false}
-            label={branchName || datasource?.label || $component.name}
-            children={rootNodes}
-            open={!collapsed}
-            {quiet}
-            {list}
-            flat={!recursive}
-            on:nodeSelect={handleNodeSelect}
-            on:nodeClick={handleNodeClick}
-            on:nodeAction={handleNodeAction}
-          >
-            <slot />
-          </Tree>
+          <div class="tree-node">
+            <div class="tree-node-item empty">No matching nodes found</div>
+          </div>
         {/if}
       {:else}
-        <div class="tree-node">
-          <div class="tree-node-item empty">
-            <span>No Records Found</span>
-          </div>
-        </div>
+        <Tree
+          id={"tree-root"}
+          {disabled}
+          hasSlot={$component.children}
+          renderSlot={false}
+          label={rootNodeName || datasource?.label || $component.name}
+          children={rootNodes}
+          open={!collapsed || hasMatches}
+          {quiet}
+          {list}
+          flat={!recursive}
+          on:nodeSelect={handleNodeSelect}
+          on:nodeClick={handleNodeClick}
+          on:nodeAction={handleNodeAction}
+        >
+          <slot />
+        </Tree>
       {/if}
 
       {#if slotPosition == "after" && $component.children}
@@ -787,7 +795,7 @@
 
 <style>
   .super-tree {
-    min-height: 360px;
+    height: 360px;
     width: 14rem;
     overflow: hidden;
     color: var(--spectrum-global-color-gray-700);
@@ -798,6 +806,7 @@
     background-color: var(--spectrum-global-color-gray-100);
     --selected-bg: var(--spectrum-global-color-gray-300);
     --hover-bg: var(--spectrum-global-color-gray-200);
+    --highlighter-bg: rgba(0, 255, 0, 0.25);
 
     &.quiet {
       border-color: transparent;
@@ -817,11 +826,13 @@
     }
 
     &.nested {
+      flex: none;
       width: 100%;
-      height: auto;
-      border: unset;
-      min-height: unset;
-      flex: unset;
+      border: none;
+      height: unset;
+      min-height: fit-content;
+      min-width: fit-content;
+      background-color: transparent;
     }
 
     & * .tree-node {
@@ -895,9 +906,9 @@
 
       & > .tree {
         position: relative;
-        margin-left: 1.25rem;
+        margin-left: 1.5rem;
         display: flex;
-        min-width: 200px;
+        min-width: 190px;
         flex-direction: column;
         align-items: stretch;
       }
@@ -952,8 +963,8 @@
       }
     }
 
-    &.rootless {
-      min-height: unset;
+    &.flex:not(.nested) {
+      flex: auto;
     }
   }
 
