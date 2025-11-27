@@ -53,19 +53,6 @@
   $: selected = $selectionStore.findIndex((x) => x == id) > -1;
 
   $: hasChildren = children?.length;
-  $: hasButtons = !isRoot && buttons?.length;
-
-  $: buttons = groupBranch
-    ? $treeOptions.groupButtons
-    : isRoot
-      ? $treeOptions.rootButtons
-      : $treeOptions.nodeButtons;
-
-  $: hasDropMenu = groupBranch
-    ? $treeOptions.groupMenuDropItems?.length
-    : isRoot
-      ? $treeOptions.rootButtons?.length
-      : $treeOptions.nodeMenuDropItems?.length;
 
   $: dropMenuItems = groupBranch
     ? $treeOptions.groupMenuDropItems
@@ -73,6 +60,7 @@
       ? $treeOptions.rootButtons
       : $treeOptions.nodeMenuDropItems;
 
+  $: hasDropMenu = dropMenuItems && dropMenuItems.length > 0;
   $: hasCheboxes = $treeOptions.checkboxes && selectable;
 
   function hasSelectedDescendant(children) {
@@ -133,12 +121,12 @@
       class="tree-node-item"
       class:hasChildren={hasChildren || renderSlot}
       class:hasDropMenu={hasDropMenu && rightChevron && !hasCheboxes}
-      class:hasButtons
       class:hasCheckbox={hasCheboxes}
       class:rightChevron
       style:color
       class:selected
       class:disabled
+      class:selectable={selectable && !disabled}
       class:is-menu-open={openMenu}
       on:click|self={handleClick}
     >
@@ -159,58 +147,38 @@
         </div>
       {/if}
 
-      <div class="left-contents" class:hasButtons>
-        {#if hasCheboxes}
-          {#if selected}
-            <i
-              on:click|preventDefault|stopPropagation={handleSelect}
-              class="ph ph-check-square"
-            />
-          {:else}
-            <i
-              on:click|preventDefault|stopPropagation={handleSelect}
-              class="ph ph-square"
-            />
-          {/if}
-        {/if}
-        {#if hasButtons && !disabled}
-          {#each buttons as { text, icon, disabled, quiet, onClick, type }}
-            <SuperButton
-              size="S"
-              {icon}
-              {text}
-              {quiet}
-              {disabled}
-              fillOnHover={true}
-              {type}
-              on:click={() => {
-                dispatch("nodeAction", {
-                  onClick,
-                  row,
-                  group: groupBranch ? label : group,
-                });
-              }}
-            />
-          {/each}
-        {/if}
-        {#if icon}
-          <i class={"ph ph-" + icon} class:icon style:color={iconColor} />
-        {/if}
+      <div class="left-contents">
         {#if hasDropMenu && rightChevron}
-          <SuperButton
-            size="XS"
-            icon={$treeOptions.nodeMenuIcon ?? "ri-more-2-fill"}
-            fillOnHover
-            quiet
-            selected={$menuStore == id}
-            onClick={(e) => {
+          <i
+            class="ph ph-dots-three-vertical menu-icon left"
+            on:click={(e) => {
               menuAnchor = e.target;
               openMenu = !openMenu;
               $menuStore = openMenu ? id : false;
             }}
-            text=""
           />
         {/if}
+
+        {#if hasCheboxes}
+          <i
+            class="ph"
+            class:selected
+            class:ph-check-square={selected}
+            class:ph-square={!!selectable && !selected}
+            on:click={handleSelect}
+          ></i>
+        {/if}
+
+        {#if icon}
+          <i
+            class="ph ph-{icon} node-icon"
+            class:selected
+            style="color: {iconColor ||
+              color ||
+              'var(--spectrum-global-color-gray-700)'}"
+          ></i>
+        {/if}
+
         <div
           class="label"
           class:selectable
@@ -230,7 +198,7 @@
       <!-- The Node Action Menu  -->
       {#if hasDropMenu && !rightChevron}
         <i
-          class="ri-more-fill menu-icon"
+          class="ph ph-dots-three menu-icon"
           on:click={(e) => {
             menuAnchor = e.target;
             openMenu = !openMenu;
@@ -239,11 +207,12 @@
         />
       {/if}
 
-      {#if hasChildren && $treeOptions.chevronPosition == "right"}
+      {#if hasChildren && rightChevron}
         <i
-          class="ri-arrow-right-s-line chevron"
-          on:mousedown={handleClick}
+          class="ph ph-caret-right chevron"
+          class:locked={hasSelectedDescendant(children, $selectionStore)}
           class:open
+          on:click={handleClick}
         >
         </i>
       {/if}
@@ -327,16 +296,6 @@
     font-weight: 600;
     color: var(--spectrum-global-color-gray-600) !important;
   }
-  .icon {
-    font-size: 14px;
-    color: var(--spectrum-global-color-gray-600);
-    margin-right: 4px;
-  }
-  .checkbox {
-    font-size: 14px;
-    color: var(--spectrum-global-color-gray-600);
-  }
-
   .chevron {
     transition: all 130ms;
     color: var(--spectrum-global-color-gray-700);
@@ -374,8 +333,37 @@
     min-width: 0;
   }
 
-  .left-contents.hasButtons {
-    gap: 0.5rem;
+  .node-icon {
+    font-size: 1rem;
+    margin-right: 0.25rem;
+    opacity: 0.85;
+  }
+
+  .node-icon.selected {
+    opacity: 1;
+  }
+
+  .menu-icon {
+    font-size: 1rem;
+    color: var(--spectrum-global-color-gray-600);
+    margin-right: 0.75rem;
+    cursor: pointer;
+  }
+
+  .menu-icon.left {
+    margin-right: 0.25rem;
+    margin-left: 0.25;
+  }
+
+  .ph.ph-square {
+    font-size: 1rem;
+    font-weight: 300;
+    color: var(--spectrum-global-color-gray-600);
+  }
+  .ph.ph-check-square {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--spectrum-global-color-gray-800);
   }
 
   .control-content {

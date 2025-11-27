@@ -64,9 +64,7 @@
 
   export let nodeIcon;
   export let nodeIconTemplate;
-  export let nodeMenu;
   export let nodeMenuIcon = "ri-more-fill";
-  export let nodeShowButtons;
   export let nodeMenuItems = [];
   export let nodeSelection = true;
   export let nodeFGColor;
@@ -77,12 +75,10 @@
   export let maxNodeSelection;
   export let selectedIds;
 
-  export let groupMenu;
   export let groupNodeIcon;
   export let groupNodeLabel;
   export let groupSelectable;
   export let groupMenuItems = [];
-  export let groupShowButtons = 0;
   export let groupFGColor;
   export let groupBGColor;
   export let groupSlot;
@@ -137,7 +133,7 @@
   let hasMatches = false;
 
   let preselectedIds = selectedIds?.split(",") || [];
-  if (preselectedIds.length) selectedNodes.set(preselectedIds);
+  $: if (preselectedIds.length) selectedNodes.set(preselectedIds);
 
   $: comp_id = $component.id;
   $: inBuilder = $builderStore.inBuilder;
@@ -158,31 +154,6 @@
           $headerMenuItemsStore.length
         )
       : [];
-
-  $: nodeButtons = nodeMenu
-    ? nodeShowButtons < $nodeMenuItemsStore?.length
-      ? $nodeMenuItemsStore.slice(0, nodeShowButtons)
-      : $nodeMenuItemsStore
-    : [];
-  $: nodeMenuDropItems =
-    nodeMenu && nodeShowButtons <= $nodeMenuItemsStore?.length
-      ? $nodeMenuItemsStore.slice(nodeShowButtons, $nodeMenuItemsStore.length)
-      : [];
-
-  $: groupButtons = groupMenu
-    ? groupShowButtons < $groupMenuItemsStore?.length
-      ? $groupMenuItemsStore.slice(0, groupShowButtons)
-      : $groupMenuItemsStore
-    : [];
-
-  $: groupMenuDropItems = groupMenu
-    ? groupShowButtons < $groupMenuItemsStore?.length
-      ? $groupMenuItemsStore.slice(
-          groupShowButtons,
-          $groupMenuItemsStore.length
-        )
-      : []
-    : [];
 
   $: defaultQuery = QueryUtils.buildQuery(filter);
   $: queryExtension = QueryUtils.buildQuery(searchFilter);
@@ -208,19 +179,15 @@
     nodeIcon,
     nodeSelection,
     groupSelectable,
-    groupMenu,
-    groupButtons,
-    groupMenuDropItems,
+    groupMenuDropItems: $groupMenuItemsStore,
     groupNodeIcon,
     groupFields,
     groupNodeLabel,
     selectedNodes,
     menuStore,
     checkboxes,
-    nodeMenu,
     nodeMenuIcon,
-    nodeButtons,
-    nodeMenuDropItems,
+    nodeMenuDropItems: $nodeMenuItemsStore,
     chevronPosition,
     hasSlot,
     quiet,
@@ -245,7 +212,7 @@
 
   $: list = controlType == "list";
   $: context = {
-    menuRowId: $menuStore,
+    row: inBuilder ? $fetch?.rows[0] || {} : {}, // Dynamically enriched at execution time
     selected: $selectedRows,
     selectedIds: maxNodeSelection == 1 ? $selectedNodes[0] : $selectedNodes,
     selectedPath: $selectedNodes.length
@@ -320,22 +287,22 @@
       group: isGroup ? groupValue : undefined,
       visible,
       quiet: isGroup ? quiet : undefined,
-      row: isGroup ? undefined : row,
+      row: type === "node" || type === "groupItem" ? row : undefined,
       open: $builderStore.inBuilder && $component.children && idx === 0,
       icon: nodeIconTemplate
-        ? processStringSync(nodeIconTemplate, { [comp_id]: { ...row } })
+        ? processStringSync(nodeIconTemplate, { [comp_id]: { row } })
         : nodeIcon,
       iconColor: nodeIconColor
-        ? processStringSync(nodeIconColor, { [comp_id]: { ...row } })
+        ? processStringSync(nodeIconColor, { [comp_id]: { row } })
         : undefined,
       label: labelTemplate
-        ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
+        ? processStringSync(labelTemplate, { [comp_id]: { row } })
         : (row[labelColumn || primaryDisplay] ?? "Not Set"),
       color: nodeFGColor
-        ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
+        ? processStringSync(nodeFGColor, { [comp_id]: { row } })
         : undefined,
       bgColor: nodeBGColor
-        ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
+        ? processStringSync(nodeBGColor, { [comp_id]: { row } })
         : undefined,
       children,
     };
@@ -555,7 +522,7 @@
       [comp_id]: {
         ...context,
         ...e.detail,
-        ...e.detail.row,
+        row: e.detail.row,
         group: e.detail.group,
       },
     });
@@ -726,7 +693,7 @@
 >
   <Provider {actions} data={context} />
 
-  {#if header && !nested}
+  {#if header}
     <TreeHeader
       headerText={headerText || datasource?.label}
       {headerButtons}
@@ -848,6 +815,7 @@
         position: relative;
         display: flex;
         justify-content: flex-start;
+        align-items: center;
         max-height: 1.75rem;
         overflow: hidden;
         background-color: transparent;
@@ -862,6 +830,10 @@
         }
 
         &.hasChildren:not(.disabled) {
+          cursor: pointer;
+        }
+
+        &.selectable:hover {
           cursor: pointer;
         }
 

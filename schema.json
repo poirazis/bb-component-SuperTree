@@ -19,7 +19,7 @@
         "scope": "global",
         "values": [
           {
-            "label": "Selected Rows",
+            "label": "Selected Nodes",
             "key": "selected",
             "type": "array"
           },
@@ -34,9 +34,9 @@
             "type": "array"
           },
           {
-            "label": "Menu Row ID",
-            "key": "menuRowId",
-            "type": "string"
+            "label": "Current Node",
+            "key": "row",
+            "type": "object"
           }
         ]
       },
@@ -294,23 +294,8 @@
             "nested": true
           },
           {
-            "type": "boolean",
-            "key": "nodeMenu",
-            "label": "Node Menu",
-            "defaultValue": false
-          },
-          {
-            "type": "number",
-            "key": "nodeShowButtons",
-            "label": "Show Buttons",
-            "min": 0,
-            "defaultValue": 0,
-            "dependsOn": "nodeMenu"
-          },
-          {
             "type": "buttonConfiguration",
             "key": "nodeMenuItems",
-            "dependsOn": { "setting": "nodeMenu", "value": true },
             "wide": true,
             "nested": true
           }
@@ -341,24 +326,9 @@
             "defaultValue": false
           },
           {
-            "type": "boolean",
-            "key": "groupMenu",
-            "label": "Group Menu",
-            "defaultValue": false
-          },
-          {
-            "type": "number",
-            "key": "groupShowButtons",
-            "label": "Show Buttons",
-            "min": 0,
-            "defaultValue": 0,
-            "dependsOn": "groupMenu"
-          },
-          {
             "type": "buttonConfiguration",
             "key": "groupMenuItems",
             "nested": true,
-            "dependsOn": "groupMenu",
             "context": [{ "key": "group", "label": "Group" }],
             "wide": true
           }
@@ -470,8 +440,7 @@
             "type": "phosphorIcon",
             "key": "nodeMenuIcon",
             "label": "Menu Icon",
-            "defaultValue": "ri-more-fill",
-            "dependsOn": "nodeMenu"
+            "defaultValue": "ri-more-fill"
           },
           {
             "type": "select",
