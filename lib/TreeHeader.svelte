@@ -34,7 +34,7 @@
     padding: "0.5rem",
     debounce: 500,
     clearValueIcon: true,
-    role: "formInput",
+    role: "inlineInput",
     readonly: inBuilder,
   };
 
@@ -141,15 +141,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 2.4rem;
+    height: 2rem;
     border-bottom: 1px solid transparent;
     background-color: var(--spectrum-global-color-gray-100);
-    color: var(--spectrum-global-color-gray-800);
+    color: var(--spectrum-global-color-gray-600);
 
     &.quiet {
       background-color: unset;
       border-bottom: none;
-      color: var(--spectrum-global-color-gray-700);
+      color: var(--spectrum-global-color-gray-600);
     }
 
     & > i {
@@ -159,22 +159,21 @@
       }
     }
 
-    &.inEdit:not(.quiet) {
+    &.inEdit {
       align-items: stretch;
-      padding: 0.25rem;
+      padding: 0rem 0.25rem;
     }
 
     & > .title {
+      font-family: inter;
       align-self: center;
-      font-size: 13px;
-      font-weight: 500;
+      font-size: 12px;
+      font-weight: 400;
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
       padding-left: 1rem;
       text-transform: uppercase;
-      letter-spacing: 1.1px;
-      opacity: 0.9;
     }
   }
   .actionMenu {
