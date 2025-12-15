@@ -1,11 +1,17 @@
 <script>
-  import { getContext, createEventDispatcher } from "svelte";
+  import { getContext, createEventDispatcher, onDestroy } from "svelte";
   import { SuperButton, SuperPopover } from "@poirazis/supercomponents-shared";
   const { Provider, ContextScopes } = getContext("sdk");
   const treeOptions = getContext("superTreeOptions");
   import { slide } from "svelte/transition";
 
   const dispatch = createEventDispatcher();
+
+  onDestroy(() => {
+    if (tooltipTimer) {
+      clearTimeout(tooltipTimer);
+    }
+  });
 
   export let label;
   export let children = [];
@@ -22,24 +28,29 @@
   export let iconColor;
   export let flat;
   export let row;
-  export let group;
+  export let isGroup;
   export let visible;
 
   let openMenu;
   let menuAnchor;
+  let labelElement;
+  let tooltipOpen = false;
+  let tooltipAnchor;
+  let tooltipTimer;
 
   $: context = {
     ...row,
     id,
     label,
     children,
-    group: groupBranch ? label : group,
+    isGroup,
+    group: groupBranch ? label : undefined,
   };
 
   $: isRoot = id == "tree-root";
   $: if (disabled) open = false;
   $: showCount = $treeOptions.showCount;
-  $: groupBranch = type == "groupBranch";
+  $: groupBranch = isGroup;
   $: rightChevron = $treeOptions.chevronPosition == "right";
   $: selectable =
     id == "tree-root" || disabled
@@ -49,8 +60,11 @@
         : $treeOptions.nodeSelection;
 
   $: selectionStore = $treeOptions.selectedNodes;
+  $: selectedGroupsStore = $treeOptions.selectedGroups;
   $: menuStore = $treeOptions.menuStore;
-  $: selected = $selectionStore.findIndex((x) => x == id) > -1;
+  $: selected =
+    $selectionStore.findIndex((x) => x == id) > -1 ||
+    (isGroup && $selectedGroupsStore.findIndex((x) => x == id) > -1);
 
   $: hasChildren = children?.length;
 
@@ -62,6 +76,8 @@
 
   $: hasDropMenu = dropMenuItems && dropMenuItems.length > 0;
   $: hasCheboxes = $treeOptions.checkboxes && selectable;
+  $: isTrimmed =
+    labelElement && labelElement.scrollWidth > labelElement.clientWidth;
 
   function hasSelectedDescendant(children) {
     if (!children) return false;
@@ -84,16 +100,21 @@
     }
 
     if (selectable) {
-      dispatch("nodeSelect", { id, label, row });
+      dispatch("nodeSelect", { id, label, row, isGroup });
       return;
     }
 
-    dispatch("nodeClick", { id, label, row });
+    dispatch("nodeClick", { id, label, row, isGroup });
   };
 
   const handleSelect = (e) => {
     if (selectable) {
-      dispatch("nodeSelect", { id, label, row });
+      dispatch("nodeSelect", {
+        id,
+        label,
+        row,
+        isGroup,
+      });
       return;
     }
   };
@@ -184,7 +205,23 @@
           class:selectable
           class:branch={type == "linkBranch"}
           style="z-index: 1;"
+          bind:this={labelElement}
           on:mousedown={selectable ? handleSelect : handleClick}
+          on:mouseenter={() => {
+            if (isTrimmed) {
+              tooltipTimer = setTimeout(() => {
+                tooltipOpen = true;
+                tooltipAnchor = labelElement;
+              }, 500);
+            }
+          }}
+          on:mouseleave={() => {
+            if (tooltipTimer) {
+              clearTimeout(tooltipTimer);
+              tooltipTimer = null;
+            }
+            tooltipOpen = false;
+          }}
         >
           {@html label ?? "Not Set"}
           {#if showCount && (isRoot || hasChildren)}
@@ -232,7 +269,6 @@
             {flat}
             {disabled}
             on:nodeSelect
-            on:nodeClick
             on:nodeAction
           >
             <slot />
@@ -247,6 +283,17 @@
       </div>
     {/if}
   </button>
+{/if}
+
+{#if tooltipOpen}
+  <SuperPopover
+    open
+    align="center"
+    anchor={tooltipAnchor}
+    on:close={() => (tooltipOpen = false)}
+  >
+    <div class="tooltip-content">{@html label}</div>
+  </SuperPopover>
 {/if}
 
 {#if hasDropMenu && openMenu}
@@ -276,7 +323,6 @@
               id,
               label,
               row,
-              group: groupBranch ? label : group,
             });
             setTimeout(() => {
               $menuStore = undefined;
@@ -387,8 +433,15 @@
     cursor: pointer;
   }
 
-  .highlight {
-    background-color: var(--spectrum-global-color-yellow-400);
-    color: var(--spectrum-global-color-gray-900);
+  .tooltip-content {
+    flex: auto;
+    display: flex;
+    align-items: center;
+    max-width: 300px;
+    word-wrap: break-word;
+    white-space: normal;
+    padding: 0.25rem 0.5rem;
+    line-height: 12px;
+    background-color: var(--spectrum-global-color-blue-100);
   }
 </style>

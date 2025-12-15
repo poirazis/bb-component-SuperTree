@@ -29,8 +29,23 @@
             "type": "array"
           },
           {
-            "label": "Selected Path",
-            "key": "selectedPath",
+            "label": "Selected Ancestors",
+            "key": "selectedAncestors",
+            "type": "array"
+          },
+          {
+            "label": "Selected Descendants",
+            "key": "selectedDescendants",
+            "type": "array"
+          },
+          {
+            "label": "breadcrumbs",
+            "key": "breadcrumbs",
+            "type": "string"
+          },
+          {
+            "label": "Selected Group",
+            "key": "selectedGroups",
             "type": "array"
           },
           {
@@ -77,7 +92,6 @@
         "type": "field",
         "key": "idColumn",
         "label": "ID Column",
-        "defaultValue": "_id",
         "resetOn": "datasource"
       },
       {
@@ -180,16 +194,6 @@
       },
       {
         "type": "boolean",
-        "key": "nodeSelection",
-        "label": "Selection",
-        "showInBar": true,
-        "barStyle": "buttons",
-        "barIcon": "SelectBox",
-        "barTitle": "Select Rows",
-        "defaultValue": true
-      },
-      {
-        "type": "boolean",
         "key": "showCount",
         "label": "Show Count",
         "defaultValue": true
@@ -285,13 +289,20 @@
           {
             "type": "field",
             "key": "labelColumn",
-            "label": "Label Column"
+            "label": "Label Column",
+            "resetOn": "datasource"
           },
           {
             "type": "text",
             "key": "labelTemplate",
+            "resetOn": "datasource",
             "label": "Label",
             "nested": true
+          },
+          {
+            "type": "columns",
+            "key": "listColumns",
+            "label": "List Columns"
           },
           {
             "type": "buttonConfiguration",
@@ -336,21 +347,18 @@
       },
       {
         "section": true,
-        "dependsOn": "nodeSelection",
         "name": "Selection Settings",
         "collapsed": true,
         "settings": [
           {
             "type": "boolean",
             "key": "checkboxes",
-            "label": "Checkboxes",
-            "dependsOn": "nodeSelection"
+            "label": "Checkboxes"
           },
           {
             "type": "number",
             "key": "maxNodeSelection",
             "label": "Max Selected",
-            "dependsOn": "nodeSelection",
             "min": 1,
             "defaultValue": 1
           },
@@ -358,8 +366,7 @@
             "type": "text",
             "key": "selectedIds",
             "label": "Selected IDs",
-            "placeholder": "Comma seperated list",
-            "dependsOn": "nodeSelection"
+            "placeholder": "Comma seperated list"
           }
         ]
       },
@@ -371,15 +378,13 @@
           {
             "type": "event",
             "key": "onNodeSelect",
-            "dependsOn": "nodeSelection",
             "label": "On Node Select",
-            "nested": true
-          },
-          {
-            "type": "event",
-            "key": "onNodeClick",
-            "label": "On Node Click",
-            "nested": true
+            "context": [
+              {
+                "label": "Current Row",
+                "key": "row"
+              }
+            ]
           },
           {
             "type": "event",
@@ -388,28 +393,8 @@
             "label": "On Group Select",
             "context": [
               {
-                "label": "Node Id",
-                "key": "id"
-              },
-              {
-                "label": "Node Label",
-                "key": "label"
-              }
-            ]
-          },
-          {
-            "type": "event",
-            "key": "onGroupClick",
-            "dependsOn": { "setting": "treeType", "value": "groupBy" },
-            "label": "On Group Click",
-            "context": [
-              {
-                "label": "Node Value",
-                "key": "id"
-              },
-              {
-                "label": "Node Label",
-                "key": "label"
+                "label": "Group",
+                "key": "group"
               }
             ]
           }

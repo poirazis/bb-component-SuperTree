@@ -36,6 +36,7 @@
     clearValueIcon: true,
     role: "inlineInput",
     readonly: inBuilder,
+    color: "var(--spectrum-global-color-blue-400)",
   };
 
   $: enrichButtons(headerDropMenuItems, $context);
@@ -47,9 +48,8 @@
   };
 
   const handleSearch = (e) => {
-    if (inBuilder) return;
     searchFilter = e.detail;
-    dispatch("search", searchFilter);
+    dispatch("search", e.detail);
   };
 
   const handleMenu = (e) => {
