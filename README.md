@@ -167,9 +167,7 @@ Once imported:
 | ----------------- | ------- | ------- | ------------------- |
 | `headerMenu`      | Boolean | `false` | Enable header menu  |
 | `headerMenuItems` | Array   | -       | Header menu actions |
-| `nodeMenu`        | Boolean | `false` | Enable node menu    |
 | `nodeMenuItems`   | Array   | -       | Node menu actions   |
-| `groupMenu`       | Boolean | `false` | Enable group menu   |
 | `groupMenuItems`  | Array   | -       | Group menu actions  |
 
 ### Events

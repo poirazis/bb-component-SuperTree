@@ -10,39 +10,674 @@
     Provider,
     fetchData,
     processStringSync,
-    enrichButtonActions,
     QueryUtils,
     memo,
     API,
     builderStore,
     screenStore,
     notificationStore,
+    enrichButtonActions,
   } = getContext("sdk");
 
   const component = getContext("component");
   const parentTree = getContext("superTreeOptions");
+  const parentFilter = getContext("superTreeFilter");
   const allContext = getContext("context");
 
-  const lookupComponent = (components, id) => {
-    let parent;
-    let pos = components?.findIndex((comp) => comp._id == id);
-    if (pos > -1) return components[pos];
-    else
-      components?.forEach((comp) => {
-        if (!parent) parent = lookupComponent(comp._children, id);
+  // Helper functions
+  const brain = {
+    lookupComponent: (components, id) => {
+      let parent;
+      let pos = components?.findIndex((comp) => comp._id == id);
+      if (pos > -1) return components[pos];
+      else
+        components?.forEach((comp) => {
+          if (!parent) parent = brain.lookupComponent(comp._children, id);
+        });
+
+      return parent;
+    },
+
+    getNode: (nodes, id) => {
+      if (!nodes || !Array.isArray(nodes)) return null;
+      for (let node of nodes) {
+        if (node.id === id) return node;
+        if (node.children) {
+          let found = brain.getNode(node.children, id);
+          if (found) return found;
+        }
+      }
+      return null;
+    },
+
+    getDescendants: (node) => {
+      let ids = [];
+      if (node.children && Array.isArray(node.children)) {
+        for (let child of node.children) {
+          ids.push(child.id);
+          ids.push(...brain.getDescendants(child));
+        }
+      }
+      return ids;
+    },
+
+    getAncestors: (tree, nodeId) => {
+      4;
+      function findAncestors(node, targetId, ancestors = []) {
+        if (node.id === targetId) {
+          return ancestors;
+        }
+
+        if (!node.children || !Array.isArray(node.children)) return null;
+
+        for (const child of node.children) {
+          const result = findAncestors(child, targetId, [
+            ...ancestors,
+            node.id,
+          ]);
+          if (result) {
+            return result;
+          }
+        }
+
+        return null;
+      }
+
+      if (!tree || !Array.isArray(tree)) return null;
+
+      for (const rootNode of tree) {
+        if (rootNode.id === nodeId) {
+          return [];
+        }
+
+        const ancestors = findAncestors(rootNode, nodeId);
+        if (ancestors) {
+          return ancestors;
+        }
+      }
+
+      return null;
+    },
+
+    getBreadcrumbs: (selectedAncestors, selectedNodes, rootNodes) => {
+      if (selectedNodes.length > 1) return null;
+
+      let ancestorLabels = selectedAncestors
+        .map((id) => {
+          let node = brain.getNode(rootNodes, id);
+          return node ? node.label : null;
+        })
+        .filter((x) => x != null);
+
+      if (selectedNodes.length > 0) {
+        let selectedNode = brain.getNode(rootNodes, selectedNodes[0]);
+        if (selectedNode) {
+          ancestorLabels.push(selectedNode.label);
+        }
+      }
+
+      return ancestorLabels.length > 0
+        ? "/ " + ancestorLabels.join(" / ")
+        : "/";
+    },
+
+    handleNodeSelect: (e) => {
+      if (inBuilder) return;
+
+      if (e.detail.isGroup) {
+        if ($selectedGroups.includes(e.detail.id)) {
+          selectedGroups.set([]);
+        } else {
+          selectedGroups.set([e.detail.id]);
+        }
+
+        if ($selectedGroups.length) onGroupSelect?.({ group: e.detail.id });
+
+        selectedNodes.set([]);
+        selectedRows.set([]);
+        selectedAncestors.set([]);
+        selectedDescendants.set([]);
+
+        return;
+      }
+
+      let row = e.detail.row;
+
+      let index = $selectedNodes.indexOf(e.detail.id);
+      if (index > -1) {
+        // deselect
+        $selectedNodes.splice(index, 1);
+        $selectedNodes = $selectedNodes;
+      } else {
+        // select
+        selectedGroups.set([]);
+        let max = maxNodeSelection || 1;
+        if (max == 0 || $selectedNodes.length < max) {
+          $selectedNodes = [...$selectedNodes, e.detail.id];
+        } else if (max == 1) {
+          $selectedNodes = [e.detail.id];
+        } else {
+          notificationStore.actions.warning(
+            "Cannot select more than " + max + " items"
+          );
+          return;
+        }
+      }
+
+      if ($selectedNodes.length == 1) {
+        let node = brain.getNode(rootNodes, $selectedNodes[0]);
+        if (node) {
+          selectedAncestors.set(
+            brain.getAncestors(rootNodes, $selectedNodes[0]) || []
+          );
+          selectedDescendants.set(brain.getDescendants(node));
+        }
+      } else {
+        selectedAncestors.set([]);
+        selectedDescendants.set([]);
+      }
+
+      $selectedRows = $fetch?.rows?.filter((row) =>
+        $selectedNodes.find((x) => x == row[idColumn])
+      );
+
+      if ($selectedRows.length && onNodeSelect) {
+        onNodeSelect({ row });
+      }
+    },
+
+    loadSelections: () => {
+      let ids = selectedIds
+        ? selectedIds
+            .split(",")
+            .map((id) => (idColumnType === "number" ? Number(id) : id))
+        : [];
+      if (ids.length) selectedNodes.set(ids);
+    },
+
+    createFetch: (datasource) => {
+      return fetchData({
+        API,
+        datasource,
+        options: {
+          query,
+          sortColumn,
+          sortOrder,
+          limit,
+          paginate,
+        },
+      });
+    },
+
+    extendQuery: (defaultQuery, extensions) => {
+      const extensionValues = Object.values(extensions || {});
+      let extendedQuery = { ...defaultQuery };
+      extensionValues.forEach((extension) => {
+        Object.entries(extension || {}).forEach(([operator, fields]) => {
+          extendedQuery[operator] = {
+            ...extendedQuery[operator],
+            ...fields,
+          };
+        });
+      });
+      return { ...extendedQuery, onEmptyFilter: "all" };
+    },
+
+    enrichNode: (row, idx, options = {}) => {
+      const {
+        isGroup = false,
+        groupValue,
+        children = [],
+        visible = true,
+      } = options;
+
+      // Determine renderSlot based on slotPosition string value
+      const shouldRenderSlot = (() => {
+        if (!hasSlot) return false;
+        switch (slotPosition) {
+          case false:
+          case "disabled":
+            return false;
+          case "all":
+            return true;
+          case "leaf":
+            return !children || children.length === 0;
+          case "branch":
+            return children && children.length > 0;
+          case "group":
+            return isGroup;
+          case "after":
+            // Handled elsewhere (e.g., after the tree), so false here
+            return false;
+          default:
+            return false;
+        }
+      })();
+
+      return {
+        id: row[idColumn] || `${groupValue}`,
+        renderSlot: shouldRenderSlot,
+        isGroup,
+        visible,
+        quiet: isGroup ? quiet : undefined,
+        row: !isGroup ? row : undefined,
+        open: $builderStore.inBuilder && $component.children && idx === 0,
+        icon: nodeIconTemplate
+          ? processStringSync(nodeIconTemplate, { [comp_id]: { row } })
+          : nodeIcon,
+        iconColor: nodeIconColor
+          ? processStringSync(nodeIconColor, { [comp_id]: { row } })
+          : undefined,
+        label: labelTemplate
+          ? processStringSync(labelTemplate, { [comp_id]: { row } })
+          : (row[labelColumn || primaryDisplay] ?? "Not Set"),
+        color: nodeFGColor
+          ? processStringSync(nodeFGColor, { [comp_id]: { row } })
+          : undefined,
+        bgColor: nodeBGColor
+          ? processStringSync(nodeBGColor, { [comp_id]: { row } })
+          : undefined,
+        children,
+        selectable: !isGroup,
+      };
+    },
+
+    buildTree: (rows) => {
+      if (!rows || rows.length === 0) {
+        rootNodes = [];
+        return;
+      }
+
+      selectedNodes.set([]);
+      selectedRows.set([]);
+      selectedAncestors.set([]);
+      selectedDescendants.set([]);
+      selectedGroups.set([]);
+
+      groupByValues.clear();
+      rootNodes = [];
+
+      if (structuredData) {
+        rootNodes = rows;
+        return;
+      }
+
+      if (treeType === "groupBy" && groupFields?.length > 0) {
+        rootNodes = brain.buildGroupNodes(rows, groupFields, 0);
+      } else if (recursive) {
+        rows
+          .filter((x) => !x[joinField])
+          .forEach((row, idx) => {
+            rootNodes.push({
+              ...brain.enrichNode(row, idx, {
+                children: brain.getChildNodes(row, rows),
+              }),
+            });
+          });
+      } else {
+        rows.forEach((row, idx) =>
+          rootNodes.push({
+            ...brain.enrichNode(row, idx, {
+              children: brain.getListColumnChildren(row),
+            }),
+          })
+        );
+      }
+    },
+
+    buildGroupNodes: (rows, groupFields, level) => {
+      const currentField = groupFields[level];
+      const nextLevel = level + 1;
+      const isLastLevel = nextLevel >= groupFields.length;
+
+      // Handle case where the group field is an array, either a relationshiup or a multi-select field
+      const groupValues = new Set(
+        rows.map((row) => {
+          if (Array.isArray(row[currentField])) {
+            return (
+              row[currentField][0]?.primaryDisplay ||
+              row[currentField][0]?._id ||
+              row[currentField][0]
+            );
+          }
+          return row[currentField];
+        })
+      );
+
+      return Array.from(groupValues).map((value, idx) => {
+        const groupRows = rows.filter((row) =>
+          brain.isChild(row[currentField], value)
+        );
+
+        const children = isLastLevel
+          ? brain.getGroupChildNodes(value, groupRows)
+          : brain.buildGroupNodes(groupRows, groupFields, nextLevel);
+
+        // Compute label first
+        const computedLabel = groupNodeLabel
+          ? processStringSync(groupNodeLabel, {
+              ...$allContext,
+              [comp_id]: {
+                ...$allContext[comp_id],
+                group: value,
+              },
+            })
+          : Array.isArray(value)
+            ? value.join(", ")
+            : value || "Not Set";
+
+        // Compute renderSlot dynamically (same logic as enrichNode)
+        const shouldRenderSlot = (() => {
+          if (!hasSlot) return false;
+          switch (slotPosition) {
+            case false:
+            case "disabled":
+              return false;
+            case "all":
+              return true;
+            case "leaf":
+              return !children || children.length === 0;
+            case "branch":
+              return children && children.length > 0;
+            case "group":
+              return true; // Since this is a groupBranch
+            case "after":
+              return false;
+            default:
+              return false;
+          }
+        })();
+
+        return {
+          selectable: groupSelectable,
+          renderSlot: shouldRenderSlot, // Now dynamic, based on slotPosition
+          id: computedLabel,
+          visible: true,
+          open: $builderStore.inBuilder && $component.children && idx === 0,
+          icon: groupNodeIcon,
+          label: computedLabel,
+          isGroup: true,
+          color: groupFGColor
+            ? processStringSync(groupFGColor, {
+                ...$allContext,
+                [comp_id]: {
+                  ...$allContext[comp_id],
+                  group: value,
+                },
+              })
+            : undefined,
+          bgColor: groupBGColor
+            ? processStringSync(groupBGColor, {
+                ...$allContext,
+                [comp_id]: {
+                  ...$allContext[comp_id],
+                  group: value,
+                },
+              })
+            : undefined,
+          children,
+        };
+      });
+    },
+
+    getGroupChildNodes: (groupValue, groupRows) => {
+      return groupRows.map((row, idx) =>
+        brain.enrichNode(row, idx, {
+          groupValue,
+          children: [...brain.getChildNodes(row)],
+        })
+      );
+    },
+
+    getChildNodes: (row, rows) => {
+      let children = [];
+
+      if (recursive) {
+        rows
+          .filter((x) => x[joinField] == row[idColumn])
+          .forEach((row, idx) => {
+            children.push({
+              ...brain.enrichNode(row, idx, {
+                children: brain.getChildNodes(row, rows),
+                visible: true,
+              }),
+              quiet,
+            });
+          });
+      }
+      return [...children, ...brain.getListColumnChildren(row)];
+    },
+
+    getListColumnChildren: (row) => {
+      // Unique listColumns by name to prevent duplicates
+      const uniqueCols = listColumns.filter(
+        (col, index, self) =>
+          index === self.findIndex((c) => c.name === col.name)
+      );
+
+      if (uniqueCols.length === 1) {
+        // If only one list column, add items as direct descendants
+        const col = uniqueCols[0];
+        const linked = row[col.name];
+        if (!Array.isArray(linked) || linked.length === 0) return [];
+
+        return linked.map((item) => ({
+          id: item._id || item.id || `item_${Math.random()}`,
+          label: item.primaryDisplay || item.label || item.name || "Unknown",
+          isGroup: false,
+          row: item,
+          visible: true,
+          open: false,
+          icon: nodeIcon,
+          iconColor: nodeIconColor,
+          color: nodeFGColor,
+          bgColor: nodeBGColor,
+          renderSlot: false,
+          selectable: true,
+        }));
+      } else {
+        // If more than one list column, create branches
+        return uniqueCols
+          .map((col) => {
+            const linked = row[col.name];
+            if (!Array.isArray(linked) || linked.length === 0) return null;
+
+            const groupChildren = linked.map((item) => ({
+              id: item._id || item.id || `item_${Math.random()}`,
+              label:
+                item.primaryDisplay || item.label || item.name || "Unknown",
+              isGroup: false,
+              row: item,
+              visible: true,
+              open: false,
+              icon: nodeIcon,
+              iconColor: nodeIconColor,
+              color: nodeFGColor,
+              bgColor: nodeBGColor,
+              renderSlot: false,
+              selectable: true,
+            }));
+
+            return {
+              id: `${row[idColumn]}_${col.id}_group`,
+              label: col.displayName,
+              isGroup: true,
+              children: groupChildren,
+              visible: true,
+              open: false,
+              icon: nodeIcon,
+              iconColor: nodeIconColor,
+              color: nodeFGColor,
+              bgColor: nodeBGColor,
+              renderSlot: false,
+              selectable: false,
+              quiet: quiet,
+            };
+          })
+          .filter((x) => x);
+      }
+    },
+
+    getAggregatedListColumnChildren: (groupRows) => {
+      // Unique listColumns by name to prevent duplicates
+      const uniqueCols = listColumns.filter(
+        (col, index, self) =>
+          index === self.findIndex((c) => c.name === col.name)
+      );
+
+      if (uniqueCols.length === 1) {
+        // If only one list column, add items as direct descendants
+        const col = uniqueCols[0];
+        // Collect all linked items from all rows
+        const allLinked = groupRows
+          .flatMap((row) => row[col.name] || [])
+          .filter(
+            (item, index, arr) =>
+              arr.findIndex((i) => i._id === item._id) === index
+          ); // unique by _id
+
+        if (allLinked.length === 0) return [];
+
+        return allLinked.map((item) => ({
+          id: item._id || item.id || `item_${Math.random()}`,
+          label: item.primaryDisplay || item.label || item.name || "Unknown",
+          isGroup: false,
+          row: item,
+          visible: true,
+          open: false,
+          icon: nodeIcon,
+          iconColor: nodeIconColor,
+          color: nodeFGColor,
+          bgColor: nodeBGColor,
+          renderSlot: false,
+          selectable: true,
+        }));
+      } else {
+        // If more than one list column, create branches
+        return uniqueCols
+          .map((col) => {
+            // Collect all linked items from all rows
+            const allLinked = groupRows
+              .flatMap((row) => row[col.name] || [])
+              .filter(
+                (item, index, arr) =>
+                  arr.findIndex((i) => i._id === item._id) === index
+              ); // unique by _id
+
+            if (allLinked.length === 0) return null;
+
+            const groupChildren = allLinked.map((item) => ({
+              id: item._id || item.id || `item_${Math.random()}`,
+              label:
+                item.primaryDisplay || item.label || item.name || "Unknown",
+              isGroup: false,
+              row: item,
+              visible: true,
+              open: false,
+              icon: nodeIcon,
+              iconColor: nodeIconColor,
+              color: nodeFGColor,
+              bgColor: nodeBGColor,
+              renderSlot: false,
+              selectable: true,
+            }));
+
+            return {
+              id: `aggregated_${col.id}_group`,
+              label: col.displayName,
+              isGroup: true,
+              children: groupChildren,
+              visible: true,
+              open: false,
+              icon: nodeIcon,
+              iconColor: nodeIconColor,
+              color: nodeFGColor,
+              bgColor: nodeBGColor,
+              renderSlot: false,
+              selectable: false,
+              quiet: quiet,
+            };
+          })
+          .filter((x) => x);
+      }
+    },
+
+    isChild: (row, group) => {
+      // Check if both are identical
+      if (row == group) return true;
+
+      // Check if both are arrays
+      if (Array.isArray(row)) {
+        return (
+          row[0]?.primaryDisplay == group ||
+          row[0]?._id == group ||
+          row[0] == group
+        );
+      }
+    },
+
+    handleNodeAction: async (e) => {
+      let cmd = enrichButtonActions(e.detail.onClick, {
+        ...$allContext,
+        [comp_id]: {
+          ...context,
+          ...e.detail,
+          row: e.detail.row,
+          group: e.detail.group,
+        },
       });
 
-    return parent;
+      await cmd?.();
+    },
+
+    handleSearch: (e) => {
+      if ($filtering) return;
+
+      $treeFilter = e.detail;
+      $selectedNodes = [];
+      $selectedRows = [];
+      selectedAncestors.set([]);
+      selectedDescendants.set([]);
+
+      if (searchMode == "client") {
+        if (e.detail) {
+          clearFilter(rootNodes);
+          filterTree(rootNodes, e.detail);
+        } else clearFilter(rootNodes);
+        return;
+      } else if (searchMode) {
+        if (e.detail) {
+          searchFilter = [
+            {
+              field: labelColumn || primaryDisplay,
+              operator: "fuzzy",
+              value: e.detail,
+              type: "string",
+              valueType: "Value",
+            },
+          ];
+        } else {
+          searchFilter = [];
+        }
+      }
+    },
+
+    getPrimaryDisplay: (definition) => {
+      if (definition) {
+        if (definition.primaryDisplay) return definition.primaryDisplay;
+        else return Object.keys(definition.schema)[0];
+      }
+    },
   };
 
-  const parent = lookupComponent(
+  const parent = brain.lookupComponent(
     $screenStore.activeScreen.props._children,
     $component.path.at(-2)
   );
 
   const nested = parent?._component == "plugin/bb-component-SuperTree";
 
-  export let branchName;
+  export let rootNodeName;
   export let controlType = "tree";
   export let treeType = "flat";
   export let chevronPosition = "left";
@@ -52,6 +687,7 @@
   export let searchMode;
   export let disabled;
   export let rootless;
+  export let rootButtons;
 
   export let header;
   export let headerText;
@@ -62,28 +698,22 @@
 
   export let nodeIcon;
   export let nodeIconTemplate;
-  export let nodeMenu;
   export let nodeMenuIcon = "ri-more-fill";
-  export let nodeShowButtons;
   export let nodeMenuItems = [];
-  export let nodeSelection;
   export let nodeFGColor;
   export let nodeBGColor;
   export let nodeIconColor;
 
   export let checkboxes;
-  export let maxNodeSelection;
+  export let maxNodeSelection = 1;
   export let selectedIds;
 
-  export let groupMenu;
   export let groupNodeIcon;
   export let groupNodeLabel;
   export let groupSelectable;
   export let groupMenuItems = [];
-  export let groupShowButtons = 0;
   export let groupFGColor;
   export let groupBGColor;
-  export let groupSlot;
   export let showCount = true;
 
   export let datasource;
@@ -96,6 +726,8 @@
   export let labelTemplate;
   export let structuredData;
 
+  export let listColumns = [];
+
   export let joinField;
   export let groupFields = [];
 
@@ -106,7 +738,7 @@
 
   // Events
   export let onNodeSelect;
-  export let onNodeClick;
+  export let onGroupSelect;
 
   // Use Stores for non-primitive data types
   const dataSourceStore = memo(datasource);
@@ -125,16 +757,18 @@
   let groupByValues = new Set();
   let rootNodes = [];
   let selectedNodes = new writable([]);
+  let selectedAncestors = new writable([]);
+  let selectedDescendants = new writable([]);
   let selectedRows = new writable([]);
-  let menuStore = new writable({});
+  let selectedGroups = writable([]);
+  let menuStore = new writable(null);
   let query = {};
   let defaultQuery;
   let searchFilter;
   let filtering = writable(false);
-  let hasMatches = true;
-
-  let preselectedIds = selectedIds?.split(",") || [];
-  if (preselectedIds.length) selectedNodes.set(preselectedIds);
+  let treeFilter = writable(null);
+  let currentRow = writable(null);
+  let hasMatches = false;
 
   $: comp_id = $component.id;
   $: inBuilder = $builderStore.inBuilder;
@@ -156,37 +790,12 @@
         )
       : [];
 
-  $: nodeButtons = nodeMenu
-    ? nodeShowButtons < $nodeMenuItemsStore?.length
-      ? $nodeMenuItemsStore.slice(0, nodeShowButtons)
-      : $nodeMenuItemsStore
-    : [];
-  $: nodeMenuDropItems =
-    nodeMenu && nodeShowButtons <= $nodeMenuItemsStore?.length
-      ? $nodeMenuItemsStore.slice(nodeShowButtons, $nodeMenuItemsStore.length)
-      : [];
-
-  $: groupButtons = groupMenu
-    ? groupShowButtons < $groupMenuItemsStore?.length
-      ? $groupMenuItemsStore.slice(0, groupShowButtons)
-      : $groupMenuItemsStore
-    : [];
-
-  $: groupMenuDropItems = groupMenu
-    ? groupShowButtons < $groupMenuItemsStore?.length
-      ? $groupMenuItemsStore.slice(
-          groupShowButtons,
-          $groupMenuItemsStore.length
-        )
-      : []
-    : [];
-
   $: defaultQuery = QueryUtils.buildQuery(filter);
   $: queryExtension = QueryUtils.buildQuery(searchFilter);
-  $: query = extendQuery(defaultQuery, [queryExtension]);
+  $: query = brain.extendQuery(defaultQuery, [queryExtension]);
 
   // Fetch data
-  $: fetch = createFetch($dataSourceStore);
+  $: fetch = brain.createFetch($dataSourceStore);
   $: fetch.update({
     query,
     sortColumn,
@@ -195,28 +804,24 @@
     paginate,
   });
 
-  $: resetSelections(nodeSelection);
-
   // Tree context
   $: treeOptions.set({
     ...$$props,
     treeType,
+    rootButtons,
     nodeIcon,
-    nodeSelection,
+    nodeSelection: true,
     groupSelectable,
-    groupMenu,
-    groupButtons,
-    groupMenuDropItems,
+    groupMenuDropItems: $groupMenuItemsStore,
     groupNodeIcon,
     groupFields,
     groupNodeLabel,
     selectedNodes,
+    selectedGroups,
     menuStore,
     checkboxes,
-    nodeMenu,
     nodeMenuIcon,
-    nodeButtons,
-    nodeMenuDropItems,
+    nodeMenuDropItems: $nodeMenuItemsStore,
     chevronPosition,
     hasSlot,
     quiet,
@@ -227,9 +832,15 @@
   $: recursive = treeType == "recursive" && joinField;
   $: hasSlot = $component.children;
 
-  $: primaryDisplay = getPrimaryDisplay(definition);
+  $: primaryDisplay = brain.getPrimaryDisplay(definition);
+  $: idColumn = idColumn || definition?.primary[0];
+  $: idColumnType = definition?.schema[idColumn]?.type || "string";
 
-  $: buildTree($fetch?.rows, $treeOptions);
+  $: brain.buildTree($fetch?.rows, $treeOptions);
+  $: brain.loadSelections(selectedIds, idColumn, idColumnType);
+
+  // Handle search as a nested component
+  // $: handleSearch({ detail: $parentFilter });
 
   $: actions = [
     {
@@ -239,372 +850,20 @@
   ];
 
   $: list = controlType == "list";
+
+  // Generate our context data
   $: context = {
+    row: inBuilder ? $fetch?.rows[0] || {} : $currentRow, // Dynamically enriched at execution time
+    breadcrumbs: brain.getBreadcrumbs(
+      $selectedAncestors,
+      $selectedNodes,
+      rootNodes
+    ),
     selected: $selectedRows,
-    selectedIds: maxNodeSelection == 1 ? $selectedNodes[0] : $selectedNodes,
-    selectedPath: $selectedNodes.length
-      ? getAncestors(rootNodes, $selectedNodes[0])
-      : [],
-  };
-
-  const createFetch = (datasource) => {
-    return fetchData({
-      API,
-      datasource,
-      options: {
-        query,
-        sortColumn,
-        sortOrder,
-        limit,
-        paginate,
-      },
-    });
-  };
-
-  const extendQuery = (defaultQuery, extensions) => {
-    const extensionValues = Object.values(extensions || {});
-    let extendedQuery = { ...defaultQuery };
-    extensionValues.forEach((extension) => {
-      Object.entries(extension || {}).forEach(([operator, fields]) => {
-        extendedQuery[operator] = {
-          ...extendedQuery[operator],
-          ...fields,
-        };
-      });
-    });
-    return { ...extendedQuery, onEmptyFilter: "all" };
-  };
-
-  const enrichNode = (row, idx, options = {}) => {
-    const {
-      isGroup = false,
-      groupValue,
-      type = "node",
-      children = [],
-      visible = true,
-    } = options;
-
-    // Determine renderSlot based on slotPosition string value
-    const shouldRenderSlot = (() => {
-      if (!hasSlot) return false;
-      switch (slotPosition) {
-        case false:
-        case "disabled":
-          return false;
-        case "all":
-          return true;
-        case "leaf":
-          return !children || children.length === 0;
-        case "branch":
-          return children && children.length > 0;
-        case "group":
-          return type === "groupBranch";
-        case "after":
-          // Handled elsewhere (e.g., after the tree), so false here
-          return false;
-        default:
-          return false;
-      }
-    })();
-
-    return {
-      id: row[idColumn] || `${groupValue}`,
-      renderSlot: shouldRenderSlot,
-      type,
-      group: isGroup ? groupValue : undefined,
-      visible,
-      quiet: isGroup ? quiet : undefined,
-      row: isGroup ? undefined : row,
-      open: $builderStore.inBuilder && $component.children && idx === 0,
-      icon: nodeIconTemplate
-        ? processStringSync(nodeIconTemplate, { [comp_id]: { ...row } })
-        : nodeIcon,
-      iconColor: nodeIconColor
-        ? processStringSync(nodeIconColor, { [comp_id]: { ...row } })
-        : undefined,
-      label: labelTemplate
-        ? processStringSync(labelTemplate, { [comp_id]: { ...row } })
-        : (row[labelColumn || primaryDisplay] ?? "Not Set"),
-      color: nodeFGColor
-        ? processStringSync(nodeFGColor, { [comp_id]: { ...row } })
-        : undefined,
-      bgColor: nodeBGColor
-        ? processStringSync(nodeBGColor, { [comp_id]: { ...row } })
-        : undefined,
-      children,
-    };
-  };
-
-  // Initialize Tree Structure
-  const buildTree = (rows, filter) => {
-    let nodes = [];
-    groupByValues.clear();
-    rootNodes = [];
-
-    if (structuredData) {
-      rootNodes = rows;
-      return;
-    }
-
-    if (treeType === "groupBy" && groupFields?.length > 0) {
-      rootNodes = buildGroupNodes(rows, groupFields, 0);
-    } else if (recursive) {
-      rows
-        .filter((x) => !x[joinField])
-        .forEach((row, idx) => {
-          rootNodes.push({
-            ...enrichNode(row, idx, { children: getChildNodes(row, rows) }),
-          });
-        });
-    } else {
-      rows.forEach((row, idx) =>
-        rootNodes.push({
-          ...enrichNode(row, idx),
-        })
-      );
-    }
-  };
-
-  const buildGroupNodes = (rows, groupFields, level) => {
-    const currentField = groupFields[level];
-    const nextLevel = level + 1;
-    const isLastLevel = nextLevel >= groupFields.length;
-
-    // Handle case where the group field is an array, either a relationshiup or a multi-select field
-    const groupValues = new Set(
-      rows.map((row) => {
-        if (Array.isArray(row[currentField])) {
-          return (
-            row[currentField][0]?.primaryDisplay ||
-            row[currentField][0]?._id ||
-            row[currentField][0]
-          );
-        }
-        return row[currentField];
-      })
-    );
-
-    return Array.from(groupValues).map((value, idx) => {
-      const groupRows = rows.filter((row) => isChild(row[currentField], value));
-
-      const children = isLastLevel
-        ? getGroupChildNodes(value, groupRows)
-        : buildGroupNodes(groupRows, groupFields, nextLevel);
-
-      // Compute renderSlot dynamically (same logic as enrichNode)
-      const shouldRenderSlot = (() => {
-        if (!hasSlot) return false;
-        switch (slotPosition) {
-          case false:
-          case "disabled":
-            return false;
-          case "all":
-            return true;
-          case "leaf":
-            return !children || children.length === 0;
-          case "branch":
-            return children && children.length > 0;
-          case "group":
-            return true; // Since this is a groupBranch
-          case "after":
-            return false;
-          default:
-            return false;
-        }
-      })();
-
-      return {
-        type: "groupBranch",
-        selectable: groupSelectable,
-        renderSlot: shouldRenderSlot, // Now dynamic, based on slotPosition
-        id: `${currentField}-${value}`,
-        open: $builderStore.inBuilder && $component.children && idx === 0,
-        icon: groupNodeIcon,
-        label: groupNodeLabel
-          ? processStringSync(groupNodeLabel, {
-              ...$allContext,
-              [comp_id]: {
-                ...$allContext[comp_id],
-                group: value,
-              },
-            })
-          : Array.isArray(value)
-            ? value.join(", ")
-            : value,
-        color: groupFGColor
-          ? processStringSync(groupFGColor, {
-              ...$allContext,
-              [comp_id]: {
-                ...$allContext[comp_id],
-                group: value,
-              },
-            })
-          : undefined,
-        bgColor: groupBGColor
-          ? processStringSync(groupBGColor, {
-              ...$allContext,
-              [comp_id]: {
-                ...$allContext[comp_id],
-                group: value,
-              },
-            })
-          : undefined,
-        children,
-      };
-    });
-  };
-
-  const getGroupChildNodes = (groupValue, groupRows) => {
-    return groupRows.map((row, idx) =>
-      enrichNode(row, idx, {
-        isGroup: true,
-        groupValue,
-        type: "groupItem",
-        children: getChildNodes(row),
-      })
-    );
-  };
-
-  const getChildNodes = (row, rows) => {
-    let children = [];
-
-    if (recursive) {
-      rows
-        .filter((x) => x[joinField] == row[idColumn])
-        .forEach((row, idx) => {
-          children.push({
-            ...enrichNode(row, idx, {
-              children: getChildNodes(row, rows),
-              visible: true,
-              type: "node",
-            }),
-            quiet,
-          });
-        });
-    }
-    return children;
-  };
-
-  function isChild(row, group) {
-    // Check if both are identical
-    if (row == group) return true;
-
-    // Check if both are arrays
-    if (Array.isArray(row)) {
-      return (
-        row[0]?.primaryDisplay == group ||
-        row[0]?._id == group ||
-        row[0] == group
-      );
-    }
-  }
-
-  const handleNodeSelect = async (e) => {
-    if (inBuilder) return;
-
-    let row = e.detail.row;
-    let index = $selectedNodes.findIndex((x) => x == e.detail.id);
-
-    if (index > -1) row = {};
-
-    if (index > -1) {
-      $selectedNodes.splice(index, 1);
-      $selectedNodes = $selectedNodes;
-    } else if ($selectedNodes.length < maxNodeSelection) {
-      $selectedNodes = [...$selectedNodes, e.detail.id];
-    } else if (maxNodeSelection == 1) {
-      $selectedNodes = [e.detail.id];
-    } else {
-      notificationStore.actions.warning(
-        "Cannot select more than " + maxNodeSelection + " items"
-      );
-    }
-    $selectedRows = $fetch?.rows?.filter((row) =>
-      $selectedNodes.find((x) => x == row[idColumn])
-    );
-
-    let cmd = enrichButtonActions(onNodeSelect, {
-      ...$allContext,
-      [comp_id]: {
-        ...$allContext[comp_id],
-        ...row,
-      },
-    });
-
-    await cmd?.();
-  };
-
-  const handleNodeClick = async (e) => {
-    let cmd = enrichButtonActions(onNodeClick, {
-      ...$allContext,
-      [comp_id]: { ...context, ...e.detail.row },
-    });
-    await cmd?.();
-  };
-
-  const handleNodeAction = async (e) => {
-    let cmd = enrichButtonActions(e.detail.onClick, {
-      ...$allContext,
-      [comp_id]: {
-        ...context,
-        ...e.detail,
-        ...e.detail.row,
-        group: e.detail.group,
-      },
-    });
-
-    await cmd?.();
-  };
-
-  const handleSearch = (e) => {
-    if ($filtering) return;
-
-    if (searchMode == "client") {
-      if (e.detail) {
-        clearFilter(rootNodes);
-        filterTree(rootNodes, e.detail);
-      } else clearFilter(rootNodes);
-      return;
-    } else {
-      if (e.detail) {
-        searchFilter = [
-          {
-            field: labelColumn || primaryDisplay,
-            operator: "fuzzy",
-            value: e.detail,
-            type: "string",
-            valueType: "Value",
-          },
-        ];
-      } else {
-        searchFilter = [];
-      }
-    }
-  };
-
-  const resetSelections = () => {
-    $selectedNodes = [];
-    let preselectedIds = selectedIds?.split(",") || [];
-    if (preselectedIds.length) selectedNodes.set(preselectedIds);
-  };
-
-  const getPrimaryDisplay = (definition) => {
-    if (definition) {
-      if (definition.primaryDisplay) return definition.primaryDisplay;
-      else return Object.keys(definition.schema)[0];
-    }
-  };
-
-  setContext("superTreeOptions", treeOptions);
-
-  $: $component.styles = {
-    ...$component.styles,
-    normal: {
-      flex: flex ? "auto" : "none",
-      display: "flex",
-      overflow: "hidden",
-      ...$component.styles.normal,
-    },
+    selectedGroups: $selectedGroups,
+    selectedIds: $selectedNodes.length ? $selectedNodes : [],
+    selectedAncestors: $selectedAncestors,
+    selectedDescendants: $selectedDescendants,
   };
 
   const filterTree = async function (tree, searchLabel) {
@@ -627,7 +886,7 @@
         const startIndex = labelStr.indexOf(searchStr);
         const endIndex = startIndex + searchStr.length;
         const originalLabel = String(node.label || "");
-        node.label = `${originalLabel.slice(0, startIndex)}<span style="font-weight: 600;  padding: 0.1rem 0rem; background-color: rgba(0, 255, 0, 0.5); color: black; border-radius: 2px;">${originalLabel.slice(startIndex, endIndex)}</span>${originalLabel.slice(endIndex)}`;
+        node.label = `${originalLabel.slice(0, startIndex)}<span style="font-size: bigger;  padding: 0.1rem 0rem; background-color: var(--highlighter-bg); border-radius: 2px;">${originalLabel.slice(startIndex, endIndex)}</span>${originalLabel.slice(endIndex)}`;
       } else {
         node.label = String(node.label || ""); // Reset to original string
       }
@@ -661,288 +920,290 @@
     }
 
     tree.forEach((root) => resetNode(root));
-    hasMatches = true;
+    hasMatches = false;
     rootNodes = rootNodes;
     return;
   }
 
-  function getAncestors(tree, nodeId) {
-    function findAncestors(node, targetId, ancestors = []) {
-      if (node.id === targetId) {
-        return ancestors;
-      }
+  setContext("superTreeOptions", treeOptions);
+  setContext("superTreeFilter", treeFilter);
 
-      for (const child of node.children) {
-        const result = findAncestors(child, targetId, [
-          ...ancestors,
-          node.label,
-        ]);
-        if (result) {
-          return result;
-        }
-      }
-
-      return null;
-    }
-
-    for (const rootNode of tree) {
-      if (rootNode.id === nodeId) {
-        return [];
-      }
-
-      const ancestors = findAncestors(rootNode, nodeId);
-      if (ancestors) {
-        return ancestors;
-      }
-    }
-
-    return null;
-  }
+  $: $component.styles = {
+    ...$component.styles,
+    normal: {
+      display: "flex",
+      overflow: "hidden",
+      ...$component.styles.normal,
+    },
+  };
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-click-events-have-key-events -->
-<div use:styleable={$component.styles}>
-  <div
-    class="super-tree"
-    class:quiet
-    class:disabled
-    class:nested
-    class:list
-    class:rootless={!rootless}
-  >
-    <Provider {actions} data={context} />
-    {#if header && !nested}
-      <TreeHeader
-        headerText={headerText || datasource?.label}
-        {headerButtons}
-        {headerDropMenuItems}
-        {headerMenuIcon}
-        {quiet}
-        {searchable}
-        {inBuilder}
-        on:search={handleSearch}
-      />
-    {/if}
-    {#if ($fetch.loading && !$fetch.loaded) || $filtering}
-      <div class="loader" class:list>
-        <div class="animation" />
-      </div>
-    {:else}
-      <div class="tree">
-        {#if rootNodes.length && hasMatches}
-          {#if rootless}
-            {#each rootNodes as node, idx}
-              {#if node.visible !== false}
-                <Tree
-                  {...node}
-                  {disabled}
-                  {quiet}
-                  {list}
-                  flat={!recursive}
-                  on:nodeSelect={handleNodeSelect}
-                  on:nodeClick={handleNodeClick}
-                  on:nodeAction={handleNodeAction}
-                >
-                  <slot />
-                </Tree>
-              {/if}
-            {/each}
-          {:else}
+<div
+  class="super-tree"
+  class:flex
+  class:quiet
+  class:disabled
+  class:nested
+  class:list
+  class:with-header={header && !nested}
+  class:rootless={!rootless}
+  use:styleable={$component.styles}
+>
+  <Provider {actions} data={context} />
+
+  {#if header}
+    <TreeHeader
+      headerText={headerText || datasource?.label}
+      {headerButtons}
+      {headerDropMenuItems}
+      {headerMenuIcon}
+      {quiet}
+      {searchable}
+      {inBuilder}
+      on:search={brain.handleSearch}
+    />
+  {/if}
+
+  {#if $fetch.loading && !$fetch.loaded}
+    <div class="loader" class:list>
+      <div class="animation"></div>
+    </div>
+  {:else}
+    <div class="tree">
+      {#if rootless}
+        {#if rootNodes.some((node) => node.visible)}
+          {#each rootNodes as node, idx}
             <Tree
-              id={"tree-root"}
+              {...node}
+              children={node.children}
               {disabled}
-              hasSlot={$component.children}
-              renderSlot={false}
-              label={branchName || datasource?.label || $component.name}
-              children={rootNodes}
-              open={!collapsed}
               {quiet}
               {list}
-              flat={!recursive}
-              on:nodeSelect={handleNodeSelect}
-              on:nodeClick={handleNodeClick}
-              on:nodeAction={handleNodeAction}
+              flat={!recursive && !groupFields?.length}
+              {selectedNodes}
+              {selectedGroups}
+              on:nodeSelect={brain.handleNodeSelect}
+              on:nodeAction={brain.handleNodeAction}
             >
-              <slot />
+              <slot></slot>
             </Tree>
-          {/if}
+          {/each}
         {:else}
           <div class="tree-node">
-            <div class="tree-node-item empty">
-              <span>No Records Found</span>
-            </div>
+            <div class="tree-node-item empty">No matching nodes found</div>
           </div>
         {/if}
-
-        {#if slotPosition == "after" && $component.children}
+      {:else}
+        <Tree
+          id={"tree-root"}
+          {disabled}
+          hasSlot={$component.children}
+          renderSlot={false}
+          label={rootNodeName || datasource?.label || $component.name}
+          children={rootNodes}
+          open={!collapsed || hasMatches}
+          {quiet}
+          {list}
+          flat={!recursive}
+          on:nodeSelect={brain.handleNodeSelect}
+          on:nodeAction={brain.handleNodeAction}
+        >
           <slot />
-        {/if}
-      </div>
-    {/if}
-  </div>
+        </Tree>
+      {/if}
+
+      {#if slotPosition == "after" && $component.children}
+        <slot />
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
   .super-tree {
-    flex: auto;
-    min-height: 360px;
-    width: 15rem;
+    height: 360px;
+    width: 14rem;
     overflow: hidden;
     color: var(--spectrum-global-color-gray-700);
     display: flex;
     flex-direction: column;
     position: relative;
+    background-color: var(--spectrum-global-color-gray-100);
+    --selected-bg: var(--spectrum-global-color-gray-300);
+    --hover-bg: var(--spectrum-global-color-gray-200);
+    --highlighter-bg: rgba(0, 255, 0, 0.25);
+  }
+
+  .super-tree.quiet {
+    border-color: transparent;
+    background-color: transparent;
+    --selected-bg: var(--spectrum-global-color-gray-200);
+    --hover-bg: var(--spectrum-global-color-gray-100);
+  }
+
+  .super-tree.quiet :global(.tree-node) {
+    font-weight: 400;
+  }
+
+  .super-tree.quiet :global(.tree-node > .tree-node-item.selected) {
+    background-color: var(--spectrum-global-color-gray-200);
+  }
+
+  .super-tree.nested {
+    flex: none;
+    width: 100%;
+    border: none;
+    height: unset;
+    min-height: fit-content;
+    min-width: fit-content;
+    background-color: transparent;
+  }
+
+  .super-tree :global(.tree-node) {
+    position: relative;
+    width: 100%;
+    line-height: 1.75rem;
+    background: unset;
+    padding: unset;
+    border: unset;
+    color: var(--spectrum-global-color-gray-700);
+  }
+
+  .super-tree :global(.tree-node > .tree-node-item) {
+    position: relative;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    max-height: 1.75rem;
+    overflow: hidden;
+    background-color: transparent;
+    border-radius: 0.25rem;
+  }
+
+  .super-tree :global(.tree-node > .tree-node-item.selected) {
+    background-color: var(--selected-bg);
+    color: var(--spectrum-global-color-gray-800) !important;
+  }
+
+  .super-tree :global(.tree-node > .tree-node-item.selected .children-count) {
+    color: var(--spectrum-global-color-gray-800) !important;
+  }
+
+  .super-tree :global(.tree-node > .tree-node-item.hasChildren:not(.disabled)) {
+    cursor: pointer;
+  }
+
+  .super-tree :global(.tree-node > .tree-node-item.selectable:hover) {
+    cursor: pointer;
+  }
+
+  .super-tree
+    :global(
+      .tree-node
+        > .tree-node-item:hover:not(.selected):not(.disabled):not(.is-menu-open)
+    ) {
+    background-color: var(--hover-bg);
+    color: var(--spectrum-global-color-gray-800);
+  }
+
+  .super-tree :global(.tree-node > .tree-node-item:hover:not(.disabled)),
+  .super-tree :global(.tree-node > .tree-node-item.is-menu-open) {
+    color: var(--spectrum-global-color-gray-700);
+    background-color: var(--selected-bg);
+  }
+
+  .super-tree
+    :global(.tree-node > .tree-node-item:hover:not(.disabled) .children-count),
+  .super-tree
+    :global(.tree-node > .tree-node-item.is-menu-open .children-count) {
+    color: var(--spectrum-global-color-gray-800) !important;
+  }
+
+  .super-tree
+    :global(.tree-node > .tree-node-item:hover:not(.disabled) > .menu-icon),
+  .super-tree :global(.tree-node > .tree-node-item.is-menu-open > .menu-icon) {
+    visibility: visible;
+  }
+
+  .super-tree :global(.tree-node > .tree-node-item > .menu-icon) {
+    visibility: hidden;
+    cursor: pointer;
+    color: var(--spectrum-global-color-gray-700);
+  }
+
+  .super-tree :global(.tree-node > .tree-node-item.rightChevron) {
+    padding-left: 0.75rem;
+  }
+
+  .super-tree :global(.tree-node > .tree-node-item.rightChevron.hasDropMenu) {
+    padding-left: 0.25rem !important;
+  }
+
+  .super-tree :global(.tree-node > .tree-node-item.empty) {
+    color: var(--spectrum-global-color-gray-600);
+    font-style: italic;
+    padding-left: 0.75rem;
+  }
+
+  .super-tree :global(.tree-node > .tree) {
+    position: relative;
+    margin-left: 1rem;
+    display: flex;
+    min-width: 190px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .super-tree > .tree {
+    flex: auto;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .super-tree.disabled {
+    color: var(--spectrum-global-color-gray-600);
+  }
+
+  .super-tree.list > .tree {
+    gap: 0.25rem;
+    padding: 0.5rem;
+  }
+
+  .super-tree.list.nested > .tree {
+    padding: unset;
+  }
+
+  .super-tree.list :global(.tree-node) {
+    background-color: var(--spectrum-global-color-gray-75);
     border: 1px solid var(--spectrum-global-color-gray-300);
+    border-radius: 4px;
+  }
 
-    &.quiet {
-      border-color: transparent;
-      background-color: transparent;
+  .super-tree.list :global(.tree-node:hover) {
+    border-color: var(--spectrum-global-color-gray-400);
+  }
 
-      & * .tree-node {
-        font-weight: 400;
+  .super-tree.list :global(.tree-node.selected) {
+    border-color: var(--spectrum-global-color-blue-500);
+  }
 
-        & > .tree-node-item {
-          &.selected {
-            background-color: var(--spectrum-global-color-gray-200);
-          }
-        }
-      }
-    }
+  .super-tree.list :global(.tree-node > .tree-node-item) {
+    padding: 0.25rem;
+    max-height: unset;
+  }
 
-    &.nested {
-      width: 100%;
-      height: auto;
-      border: unset;
-      min-height: unset;
-    }
+  .super-tree.list :global(.tree-node > .tree) {
+    padding: 0.5rem;
+    gap: 0.5rem;
+    margin-left: 1rem;
+  }
 
-    & * .tree-node {
-      position: relative;
-      width: 100%;
-      line-height: 1.75rem;
-      font-size: 13px;
-
-      & > .tree-node-item {
-        position: relative;
-        display: flex;
-        justify-content: flex-start;
-        max-height: 1.75rem;
-        overflow: hidden;
-        background-color: transparent;
-        border-radius: 0.25rem;
-
-        &.selected {
-          background-color: var(--spectrum-global-color-blue-100);
-          color: var(--spectrum-global-color-gray-900);
-          & *.children-count {
-            color: var(--spectrum-global-color-gray-800) !important;
-          }
-        }
-
-        &.flat {
-          padding-left: 0.5rem;
-        }
-
-        &.hasChildren:not(.disabled) {
-          cursor: pointer;
-        }
-
-        &:hover:not(.selected):not(.disabled) {
-          background-color: var(--spectrum-global-color-gray-200);
-        }
-
-        &:hover:not(.disabled),
-        &.is-menu-open {
-          color: var(--spectrum-global-color-gray-900);
-          & *.children-count {
-            color: var(--spectrum-global-color-gray-800) !important;
-          }
-
-          & > .menu-icon {
-            visibility: visible;
-          }
-        }
-
-        & > .menu-icon {
-          visibility: hidden;
-          cursor: pointer;
-          color: var(--spectrum-global-color-gray-600);
-        }
-
-        &.rightChevron {
-          padding-left: 0.75rem;
-        }
-
-        &.empty {
-          color: var(--spectrum-global-color-gray-600);
-          font-style: italic;
-          padding-left: 0.75rem;
-        }
-      }
-
-      & > .tree {
-        position: relative;
-        margin-left: 1.25rem;
-        display: flex;
-        min-width: 200px;
-        flex-direction: column;
-        align-items: stretch;
-      }
-    }
-    & > .tree {
-      flex: auto;
-      overflow: auto;
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    &.disabled {
-      color: var(--spectrum-global-color-gray-600);
-    }
-
-    &.list {
-      & > .tree {
-        gap: 0.5rem;
-        padding: 0.5rem;
-      }
-
-      &.nested {
-        & > .tree {
-          padding: unset;
-        }
-      }
-
-      & > * .tree-node {
-        background-color: var(--spectrum-global-color-gray-75);
-        border: 1px solid var(--spectrum-global-color-gray-300);
-        border-radius: 4px;
-
-        &:hover {
-          border-color: var(--spectrum-global-color-gray-400);
-        }
-
-        &.selected {
-          border-color: var(--spectrum-global-color-blue-500);
-        }
-
-        & > .tree-node-item {
-          padding: 0.25rem;
-          max-height: unset;
-        }
-
-        & > .tree {
-          padding: 0.5rem;
-          gap: 0.5rem;
-          margin-left: 1rem;
-        }
-      }
-    }
-
-    &.rootless {
-      min-height: unset;
-    }
+  .super-tree.flex:not(.nested) {
+    flex: auto;
   }
 
   .loader {
@@ -950,27 +1211,29 @@
     align-items: center;
     padding-left: 1rem;
     height: 2rem;
+  }
 
-    &.list {
-      height: 2.6rem;
-    }
+  .loader.list {
+    height: 2.6rem;
+  }
 
-    & > .animation {
-      height: 5px;
-      aspect-ratio: 5;
-      -webkit-mask: linear-gradient(90deg, #0000, #000 20% 80%, #0000);
-      background: radial-gradient(
-          closest-side at 37.5% 50%,
-          var(--spectrum-global-color-blue-500) 94%,
-          #0000
-        )
-        0 / calc(80% / 3) 100%;
-      animation: l48 0.75s infinite linear;
-    }
-    @keyframes l48 {
-      100% {
-        background-position: 36.36%;
-      }
+  .loader > .animation {
+    height: 5px;
+    aspect-ratio: 5;
+    -webkit-mask: linear-gradient(90deg, #0000, #000 20% 80%, #0000);
+    mask: linear-gradient(90deg, #0000, #000 20% 80%, #0000);
+    background: radial-gradient(
+        closest-side at 37.5% 50%,
+        var(--spectrum-global-color-blue-500) 94%,
+        #0000
+      )
+      0 / calc(80% / 3) 100%;
+    animation: l48 0.75s infinite linear;
+  }
+
+  @keyframes l48 {
+    100% {
+      background-position: 36.36%;
     }
   }
 </style>

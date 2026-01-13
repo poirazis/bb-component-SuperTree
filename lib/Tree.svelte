@@ -1,9 +1,13 @@
 <script>
   import { getContext, createEventDispatcher } from "svelte";
-  import { SuperButton, SuperPopover } from "@poirazis/supercomponents-shared";
+  import {
+    SuperButton,
+    SuperPopover,
+    Tooltip,
+  } from "@poirazis/supercomponents-shared";
   const { Provider, ContextScopes } = getContext("sdk");
   const treeOptions = getContext("superTreeOptions");
-  import { slide } from "svelte/transition";
+  import Self from "./Tree.svelte";
 
   const dispatch = createEventDispatcher();
 
@@ -17,28 +21,32 @@
   export let list;
   export let type;
   export let icon;
-  export let accordion;
   export let color;
   export let bgColor;
   export let iconColor;
   export let flat;
   export let row;
-  export let group;
+  export let isGroup;
   export let visible;
 
   let openMenu;
   let menuAnchor;
+  let labelElement;
+  let tooltipShow = false;
 
   $: context = {
     ...row,
     id,
     label,
     children,
+    isGroup,
+    group: groupBranch ? label : undefined,
   };
 
+  $: isRoot = id == "tree-root";
   $: if (disabled) open = false;
   $: showCount = $treeOptions.showCount;
-  $: groupBranch = type == "groupBranch";
+  $: groupBranch = isGroup;
   $: rightChevron = $treeOptions.chevronPosition == "right";
   $: selectable =
     id == "tree-root" || disabled
@@ -48,45 +56,61 @@
         : $treeOptions.nodeSelection;
 
   $: selectionStore = $treeOptions.selectedNodes;
+  $: selectedGroupsStore = $treeOptions.selectedGroups;
   $: menuStore = $treeOptions.menuStore;
-  $: selected = $selectionStore.findIndex((x) => x == id) > -1;
+  $: selected =
+    $selectionStore.findIndex((x) => x == id) > -1 ||
+    (isGroup && $selectedGroupsStore.findIndex((x) => x == id) > -1);
 
   $: hasChildren = children?.length;
-  $: hasButtons = buttons?.length;
-
-  $: buttons = groupBranch
-    ? $treeOptions.groupButtons
-    : $treeOptions.nodeButtons;
-
-  $: hasDropMenu = groupBranch
-    ? $treeOptions.groupMenuDropItems?.length
-    : $treeOptions.nodeMenuDropItems?.length;
 
   $: dropMenuItems = groupBranch
     ? $treeOptions.groupMenuDropItems
-    : $treeOptions.nodeMenuDropItems;
+    : isRoot
+      ? $treeOptions.rootButtons
+      : $treeOptions.nodeMenuDropItems;
 
+  $: hasDropMenu = dropMenuItems && dropMenuItems.length > 0;
   $: hasCheboxes = $treeOptions.checkboxes && selectable;
+  $: isTrimmed =
+    labelElement && labelElement.scrollWidth > labelElement.clientWidth;
+
+  function hasSelectedDescendant(children) {
+    if (!children || !Array.isArray(children)) return false;
+    for (let child of children) {
+      if ($selectionStore.includes(child.id)) return true;
+      if (child.children && hasSelectedDescendant(child.children)) return true;
+    }
+    return false;
+  }
 
   const handleClick = (e) => {
     if (disabled) return;
 
-    if (children?.length || renderSlot || accordion) {
-      open = !open;
+    if (children?.length || renderSlot) {
+      // Prevent collapsing if any descendant is selected
+      if (!hasSelectedDescendant(children)) {
+        open = !open;
+      }
       return;
     }
 
     if (selectable) {
-      dispatch("nodeSelect", { id, label, row });
+      dispatch("nodeSelect", { id, label, row, isGroup });
       return;
     }
 
-    dispatch("nodeClick", { id, label, row });
+    dispatch("nodeClick", { id, label, row, isGroup });
   };
 
   const handleSelect = (e) => {
     if (selectable) {
-      dispatch("nodeSelect", { id, label, row });
+      dispatch("nodeSelect", {
+        id,
+        label,
+        row,
+        isGroup,
+      });
       return;
     }
   };
@@ -97,12 +121,10 @@
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 {#if visible !== false}
-  <div
+  <button
     class="tree-node"
     class:is-disabled={disabled}
     class:is-open={open}
-    class:accordion
-    class:groupBranch
     style:background-color={bgColor}
     on:contextmenu|preventDefault|stopPropagation={(e) => {
       menuAnchor = e.target;
@@ -116,27 +138,25 @@
       class="tree-node-item"
       class:hasChildren={hasChildren || renderSlot}
       class:hasDropMenu={hasDropMenu && rightChevron && !hasCheboxes}
-      class:hasButtons
       class:hasCheckbox={hasCheboxes}
       class:rightChevron
-      class:accordion
       style:color
       class:selected
       class:disabled
+      class:selectable={selectable && !disabled}
       class:is-menu-open={openMenu}
-      style:background-color={openMenu && !selected
-        ? "var(--spectrum-global-color-gray-100)"
-        : bgColor}
       on:click|self={handleClick}
     >
       {#if !rightChevron}
         <div
           class="control-content"
-          class:flat={flat && !hasChildren && !renderSlot}
+          class:flat={flat && !hasChildren && !renderSlot && !isRoot}
         >
-          {#if (hasChildren || renderSlot) && $treeOptions.chevronPosition == "left"}
+          {#if $treeOptions.chevronPosition == "left" && !flat}
             <i
-              class="ri-arrow-right-s-line chevron"
+              class="ph ph-caret-right chevron"
+              class:locked={hasSelectedDescendant(children, $selectionStore)}
+              class:disabled={!hasChildren && !renderSlot}
               class:open
               on:click={handleClick}
             >
@@ -145,69 +165,58 @@
         </div>
       {/if}
 
-      <div class="left-contents" class:hasButtons>
-        {#if hasCheboxes}
-          {#if selected}
-            <i
-              on:click|preventDefault|stopPropagation={handleSelect}
-              class="ri-checkbox-fill checkbox"
-            />
-          {:else}
-            <i
-              on:click|preventDefault|stopPropagation={handleSelect}
-              class="ri-checkbox-blank-line checkbox"
-            />
-          {/if}
-        {/if}
-        {#if hasButtons && !disabled}
-          {#each buttons as { text, icon, disabled, quiet, onClick, type }}
-            <SuperButton
-              size="S"
-              {icon}
-              {text}
-              {quiet}
-              {disabled}
-              fillOnHover={true}
-              {type}
-              on:click={() => {
-                dispatch("nodeAction", {
-                  onClick,
-                  row,
-                  group: groupBranch ? label : group,
-                });
-              }}
-            />
-          {/each}
-        {/if}
-        {#if icon}
-          <i class={icon} class:icon style:color={iconColor} />
-        {/if}
+      <div class="left-contents">
         {#if hasDropMenu && rightChevron}
-          <SuperButton
-            size="XS"
-            icon={$treeOptions.nodeMenuIcon ?? "ri-more-2-fill"}
-            fillOnHover
-            quiet
-            selected={$menuStore == id}
+          <i
+            class="ph ph-dots-three-vertical menu-icon left"
             on:click={(e) => {
-              menuAnchor = e.detail;
+              menuAnchor = e.target;
               openMenu = !openMenu;
               $menuStore = openMenu ? id : false;
             }}
-            text=""
-          />
+          ></i>
         {/if}
+
+        {#if hasCheboxes}
+          <i
+            class="ph"
+            class:selected
+            class:ph-check-square={selected}
+            class:ph-square={!!selectable && !selected}
+            on:click={handleSelect}
+          ></i>
+        {/if}
+
+        {#if icon}
+          <i
+            class="ph ph-{icon} node-icon"
+            class:selected
+            style="color: {iconColor ||
+              color ||
+              'var(--spectrum-global-color-gray-700)'}"
+          ></i>
+        {/if}
+
         <div
           class="label"
           class:selectable
           class:branch={type == "linkBranch"}
           style="z-index: 1;"
+          bind:this={labelElement}
           on:mousedown={selectable ? handleSelect : handleClick}
+          on:mouseenter={() => {
+            if (isTrimmed) {
+              tooltipShow = true;
+            }
+          }}
+          on:mouseleave={() => {
+            tooltipShow = false;
+          }}
         >
           {@html label ?? "Not Set"}
-          {#if showCount && children?.length}
+          {#if showCount && (isRoot || hasChildren)}
             <span class="children-count">
-              ({children?.length})
+              ({children?.filter((n) => n.visible)?.length})
             </span>
           {/if}
         </div>
@@ -216,67 +225,56 @@
       <!-- The Node Action Menu  -->
       {#if hasDropMenu && !rightChevron}
         <i
-          class="ri-more-fill menu-icon"
+          class="ph ph-dots-three menu-icon"
           on:click={(e) => {
             menuAnchor = e.target;
             openMenu = !openMenu;
             $menuStore = openMenu ? id : false;
           }}
-        />
+        >
+        </i>
       {/if}
 
-      {#if hasChildren && $treeOptions.chevronPosition == "right"}
+      {#if hasChildren && rightChevron}
         <i
-          class="ri-arrow-right-s-line chevron accordion"
-          on:mousedown={handleClick}
+          class="ph ph-caret-right chevron"
+          class:locked={hasSelectedDescendant(children, $selectionStore)}
           class:open
+          on:click={handleClick}
         >
         </i>
       {/if}
     </div>
 
     {#if (children?.length || renderSlot) && open}
-      <div
-        class="tree"
-        style:display={open ? "flex" : "none"}
-        transition:slide={{ duration: 230 }}
-      >
-        {#each children as node}
-          <svelte:self
-            id={node.id}
+      <div class="tree" style:display={open ? "flex" : "none"}>
+        {#each children as child}
+          <Self
+            {...child}
+            children={child.children}
             {hasSlot}
-            renderSlot={node.renderSlot}
-            label={node.label}
-            children={node.children}
-            quiet={node.quiet}
-            open={node.open}
-            type={node.type}
-            icon={node.icon}
-            iconColor={node.iconColor}
-            color={node.color}
-            bgColor={node.bgColor}
-            group={node.group}
-            showCount={node.showCount}
             {list}
-            {accordion}
-            visible={node.visible}
-            row={node.row}
+            {flat}
+            {disabled}
             on:nodeSelect
-            on:nodeClick
             on:nodeAction
           >
             <slot />
-          </svelte:self>
+          </Self>
         {/each}
 
-        {#if renderSlot && $treeOptions.hasSlot && (groupBranch || open || children.length == 0)}
+        {#if renderSlot && $treeOptions.hasSlot}
           <Provider data={context} scope={ContextScopes.Local}>
             <slot />
           </Provider>
         {/if}
       </div>
     {/if}
-  </div>
+  </button>
+{/if}
+
+{#if tooltipShow}
+  <Tooltip anchor={labelElement} content={label} show={tooltipShow} />
 {/if}
 
 {#if hasDropMenu && openMenu}
@@ -300,15 +298,16 @@
           {type}
           quiet
           {disabled}
-          on:click={() => {
+          onClick={() => {
             dispatch("nodeAction", {
               onClick,
               id,
               label,
               row,
-              group: groupBranch ? label : group,
             });
-            $menuStore = undefined;
+            setTimeout(() => {
+              $menuStore = undefined;
+            }, 100);
             openMenu = false;
           }}
           menuItem
@@ -324,23 +323,24 @@
     font-weight: 600;
     color: var(--spectrum-global-color-gray-600) !important;
   }
-  .icon {
-    font-size: 14px;
-    color: var(--spectrum-global-color-gray-600);
-    margin-right: 4px;
-  }
-  .checkbox {
-    font-size: 14px;
-    color: var(--spectrum-global-color-gray-600);
-  }
-
-  .chevron.accordion {
-    color: var(--spectrum-global-color-gray-600);
-    font-size: 18px;
+  .chevron {
+    transition: all 130ms;
+    color: var(--spectrum-global-color-gray-700);
   }
   .chevron.open {
     transform: rotate(90deg);
     color: var(--spectrum-global-color-gray-800);
+  }
+
+  .chevron.locked {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .chevron.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+    cursor: pointer;
   }
 
   .children-count {
@@ -366,27 +366,48 @@
     min-width: 0;
   }
 
-  .left-contents.hasButtons {
-    gap: 0.5rem;
+  .node-icon {
+    font-size: 1rem;
+    margin-right: 0.25rem;
+    opacity: 0.85;
+  }
+
+  .node-icon.selected {
+    opacity: 1;
+  }
+
+  .menu-icon {
+    font-size: 1rem;
+    color: var(--spectrum-global-color-gray-600);
+    margin-right: 0.75rem;
+    cursor: pointer;
+  }
+
+  .menu-icon.left {
+    margin-right: 0.25rem;
+    margin-left: 0.25;
+  }
+
+  .ph.ph-square {
+    font-size: 1rem;
+    font-weight: 300;
+    color: var(--spectrum-global-color-gray-600);
+  }
+  .ph.ph-check-square {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--spectrum-global-color-gray-800);
   }
 
   .control-content {
-    min-width: 1.4rem;
+    min-width: 1.75rem;
     display: flex;
+    padding-left: 0.25rem;
+    align-items: center;
     justify-content: center;
 
     &.flat {
-      min-width: 0.75rem;
-    }
-
-    & > .chevron {
-      transition: all 130ms;
-      font-size: 16px;
-      color: var(--spectrum-global-color-gray-600);
-
-      &.open {
-        color: var(--spectrum-global-color-gray-800);
-      }
+      min-width: 1rem;
     }
   }
 
@@ -399,8 +420,15 @@
     cursor: pointer;
   }
 
-  .highlight {
-    background-color: var(--spectrum-global-color-yellow-400);
-    color: var(--spectrum-global-color-gray-900);
+  .tooltip-content {
+    flex: auto;
+    display: flex;
+    align-items: center;
+    max-width: 300px;
+    word-wrap: break-word;
+    white-space: normal;
+    padding: 0.25rem 0.5rem;
+    line-height: 12px;
+    background-color: var(--spectrum-global-color-blue-100);
   }
 </style>

@@ -36,6 +36,7 @@
     clearValueIcon: true,
     role: "inlineInput",
     readonly: inBuilder,
+    color: "var(--spectrum-global-color-blue-400)",
   };
 
   $: enrichButtons(headerDropMenuItems, $context);
@@ -47,9 +48,8 @@
   };
 
   const handleSearch = (e) => {
-    if (inBuilder) return;
     searchFilter = e.detail;
-    dispatch("search", searchFilter);
+    dispatch("search", e.detail);
   };
 
   const handleMenu = (e) => {
@@ -63,9 +63,8 @@
   class="searchHeader"
   class:list={!quiet}
   class:quiet
-  class:inEdit
+  class:inEdit={inEdit || hover}
   class:searchable
-  class:filtered={searchFilter}
   on:mouseleave={() => (hover = false)}
 >
   {#if (searchable && hover && !disabled) || searchFilter || inEdit}
@@ -99,7 +98,7 @@
       {#if headerDropMenuItems?.length}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <span class="drop-menu-icon" on:click={handleMenu}>
-          <i class={headerMenuIcon} />
+          <i class={headerMenuIcon}></i>
         </span>
       {/if}
     </div>
@@ -139,18 +138,18 @@
 <style>
   .searchHeader {
     flex: none;
-    width: 100%;
     display: flex;
-    align-items: stretch;
+    align-items: center;
     justify-content: space-between;
-    height: 38px;
+    height: 2.25rem;
     border-bottom: 1px solid transparent;
     background-color: var(--spectrum-global-color-gray-100);
+    color: var(--spectrum-global-color-gray-600);
 
     &.quiet {
       background-color: unset;
       border-bottom: none;
-      color: var(--spectrum-global-color-gray-700);
+      color: var(--spectrum-global-color-gray-600);
     }
 
     & > i {
@@ -161,26 +160,20 @@
     }
 
     &.inEdit {
-      border-bottom: 1px solid var(--spectrum-global-color-gray-400);
       align-items: stretch;
-    }
-
-    &.filtered {
-      border-bottom: 1px solid var(--spectrum-global-color-blue-400);
-      align-items: stretch;
+      padding: 0rem 0.25rem;
     }
 
     & > .title {
+      font-family: inter;
       align-self: center;
       font-size: 12px;
-      font-weight: 500;
+      font-weight: 400;
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
-      padding-left: 0.75rem;
+      padding-left: 1rem;
       text-transform: uppercase;
-      letter-spacing: 1.2px;
-      color: var(--spectrum-global-color-gray-800);
     }
   }
   .actionMenu {
