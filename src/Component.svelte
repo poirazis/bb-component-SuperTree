@@ -39,6 +39,7 @@
     },
 
     getNode: (nodes, id) => {
+      if (!nodes || !Array.isArray(nodes)) return null;
       for (let node of nodes) {
         if (node.id === id) return node;
         if (node.children) {
@@ -51,7 +52,7 @@
 
     getDescendants: (node) => {
       let ids = [];
-      if (node.children) {
+      if (node.children && Array.isArray(node.children)) {
         for (let child of node.children) {
           ids.push(child.id);
           ids.push(...brain.getDescendants(child));
@@ -61,10 +62,13 @@
     },
 
     getAncestors: (tree, nodeId) => {
+      4;
       function findAncestors(node, targetId, ancestors = []) {
         if (node.id === targetId) {
           return ancestors;
         }
+
+        if (!node.children || !Array.isArray(node.children)) return null;
 
         for (const child of node.children) {
           const result = findAncestors(child, targetId, [
@@ -78,6 +82,8 @@
 
         return null;
       }
+
+      if (!tree || !Array.isArray(tree)) return null;
 
       for (const rootNode of tree) {
         if (rootNode.id === nodeId) {
@@ -277,6 +283,11 @@
     },
 
     buildTree: (rows) => {
+      if (!rows || rows.length === 0) {
+        rootNodes = [];
+        return;
+      }
+
       selectedNodes.set([]);
       selectedRows.set([]);
       selectedAncestors.set([]);
@@ -824,9 +835,9 @@
   $: primaryDisplay = brain.getPrimaryDisplay(definition);
   $: idColumn = idColumn || definition?.primary[0];
   $: idColumnType = definition?.schema[idColumn]?.type || "string";
-  $: brain.loadSelections(selectedIds, idColumn, idColumnType);
 
   $: brain.buildTree($fetch?.rows, $treeOptions);
+  $: brain.loadSelections(selectedIds, idColumn, idColumnType);
 
   // Handle search as a nested component
   // $: handleSearch({ detail: $parentFilter });
@@ -850,7 +861,7 @@
     ),
     selected: $selectedRows,
     selectedGroups: $selectedGroups,
-    selectedIds: $selectedNodes.length ? $selectedNodes : null,
+    selectedIds: $selectedNodes.length ? $selectedNodes : [],
     selectedAncestors: $selectedAncestors,
     selectedDescendants: $selectedDescendants,
   };
@@ -957,7 +968,7 @@
 
   {#if $fetch.loading && !$fetch.loaded}
     <div class="loader" class:list>
-      <div class="animation" />
+      <div class="animation"></div>
     </div>
   {:else}
     <div class="tree">
@@ -966,6 +977,7 @@
           {#each rootNodes as node, idx}
             <Tree
               {...node}
+              children={node.children}
               {disabled}
               {quiet}
               {list}
@@ -975,7 +987,7 @@
               on:nodeSelect={brain.handleNodeSelect}
               on:nodeAction={brain.handleNodeAction}
             >
-              <slot />
+              <slot></slot>
             </Tree>
           {/each}
         {:else}
@@ -1022,170 +1034,176 @@
     --selected-bg: var(--spectrum-global-color-gray-300);
     --hover-bg: var(--spectrum-global-color-gray-200);
     --highlighter-bg: rgba(0, 255, 0, 0.25);
+  }
 
-    &.quiet {
-      border-color: transparent;
-      background-color: transparent;
-      --selected-bg: var(--spectrum-global-color-gray-200);
-      --hover-bg: var(--spectrum-global-color-gray-100);
+  .super-tree.quiet {
+    border-color: transparent;
+    background-color: transparent;
+    --selected-bg: var(--spectrum-global-color-gray-200);
+    --hover-bg: var(--spectrum-global-color-gray-100);
+  }
 
-      & * .tree-node {
-        font-weight: 400;
+  .super-tree.quiet :global(.tree-node) {
+    font-weight: 400;
+  }
 
-        & > .tree-node-item {
-          &.selected {
-            background-color: var(--spectrum-global-color-gray-200);
-          }
-        }
-      }
-    }
+  .super-tree.quiet :global(.tree-node > .tree-node-item.selected) {
+    background-color: var(--spectrum-global-color-gray-200);
+  }
 
-    &.nested {
-      flex: none;
-      width: 100%;
-      border: none;
-      height: unset;
-      min-height: fit-content;
-      min-width: fit-content;
-      background-color: transparent;
-    }
+  .super-tree.nested {
+    flex: none;
+    width: 100%;
+    border: none;
+    height: unset;
+    min-height: fit-content;
+    min-width: fit-content;
+    background-color: transparent;
+  }
 
-    & * .tree-node {
-      position: relative;
-      width: 100%;
-      line-height: 1.75rem;
-      background: unset;
-      padding: unset;
-      border: unset;
-      color: var(--spectrum-global-color-gray-700);
+  .super-tree :global(.tree-node) {
+    position: relative;
+    width: 100%;
+    line-height: 1.75rem;
+    background: unset;
+    padding: unset;
+    border: unset;
+    color: var(--spectrum-global-color-gray-700);
+  }
 
-      & > .tree-node-item {
-        position: relative;
-        display: flex;
-        justify-content: flex-start;
-        align-items: center;
-        max-height: 1.75rem;
-        overflow: hidden;
-        background-color: transparent;
-        border-radius: 0.25rem;
+  .super-tree :global(.tree-node > .tree-node-item) {
+    position: relative;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    max-height: 1.75rem;
+    overflow: hidden;
+    background-color: transparent;
+    border-radius: 0.25rem;
+  }
 
-        &.selected {
-          background-color: var(--selected-bg);
-          color: var(--spectrum-global-color-gray-800) !important;
-          & *.children-count {
-            color: var(--spectrum-global-color-gray-800) !important;
-          }
-        }
+  .super-tree :global(.tree-node > .tree-node-item.selected) {
+    background-color: var(--selected-bg);
+    color: var(--spectrum-global-color-gray-800) !important;
+  }
 
-        &.hasChildren:not(.disabled) {
-          cursor: pointer;
-        }
+  .super-tree :global(.tree-node > .tree-node-item.selected .children-count) {
+    color: var(--spectrum-global-color-gray-800) !important;
+  }
 
-        &.selectable:hover {
-          cursor: pointer;
-        }
+  .super-tree :global(.tree-node > .tree-node-item.hasChildren:not(.disabled)) {
+    cursor: pointer;
+  }
 
-        &:hover:not(.selected):not(.disabled):not(.is-menu-open) {
-          background-color: var(--hover-bg);
-          color: var(--spectrum-global-color-gray-800);
-        }
+  .super-tree :global(.tree-node > .tree-node-item.selectable:hover) {
+    cursor: pointer;
+  }
 
-        &:hover:not(.disabled),
-        &.is-menu-open {
-          color: var(--spectrum-global-color-gray-700);
-          background-color: var(--selected-bg);
-          & *.children-count {
-            color: var(--spectrum-global-color-gray-800) !important;
-          }
+  .super-tree
+    :global(
+      .tree-node
+        > .tree-node-item:hover:not(.selected):not(.disabled):not(.is-menu-open)
+    ) {
+    background-color: var(--hover-bg);
+    color: var(--spectrum-global-color-gray-800);
+  }
 
-          & > .menu-icon {
-            visibility: visible;
-          }
-        }
+  .super-tree :global(.tree-node > .tree-node-item:hover:not(.disabled)),
+  .super-tree :global(.tree-node > .tree-node-item.is-menu-open) {
+    color: var(--spectrum-global-color-gray-700);
+    background-color: var(--selected-bg);
+  }
 
-        & > .menu-icon {
-          visibility: hidden;
-          cursor: pointer;
-          color: var(--spectrum-global-color-gray-700);
-        }
+  .super-tree
+    :global(.tree-node > .tree-node-item:hover:not(.disabled) .children-count),
+  .super-tree
+    :global(.tree-node > .tree-node-item.is-menu-open .children-count) {
+    color: var(--spectrum-global-color-gray-800) !important;
+  }
 
-        &.rightChevron {
-          padding-left: 0.75rem;
+  .super-tree
+    :global(.tree-node > .tree-node-item:hover:not(.disabled) > .menu-icon),
+  .super-tree :global(.tree-node > .tree-node-item.is-menu-open > .menu-icon) {
+    visibility: visible;
+  }
 
-          &.hasDropMenu {
-            padding-left: 0.25rem !important;
-          }
-        }
+  .super-tree :global(.tree-node > .tree-node-item > .menu-icon) {
+    visibility: hidden;
+    cursor: pointer;
+    color: var(--spectrum-global-color-gray-700);
+  }
 
-        &.empty {
-          color: var(--spectrum-global-color-gray-600);
-          font-style: italic;
-          padding-left: 0.75rem;
-        }
-      }
+  .super-tree :global(.tree-node > .tree-node-item.rightChevron) {
+    padding-left: 0.75rem;
+  }
 
-      & > .tree {
-        position: relative;
-        margin-left: 1rem;
-        display: flex;
-        min-width: 190px;
-        flex-direction: column;
-        align-items: stretch;
-      }
-    }
-    & > .tree {
-      flex: auto;
-      overflow: auto;
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-    }
+  .super-tree :global(.tree-node > .tree-node-item.rightChevron.hasDropMenu) {
+    padding-left: 0.25rem !important;
+  }
 
-    &.disabled {
-      color: var(--spectrum-global-color-gray-600);
-    }
+  .super-tree :global(.tree-node > .tree-node-item.empty) {
+    color: var(--spectrum-global-color-gray-600);
+    font-style: italic;
+    padding-left: 0.75rem;
+  }
 
-    &.list {
-      & > .tree {
-        gap: 0.25rem;
-        padding: 0.5rem;
-      }
+  .super-tree :global(.tree-node > .tree) {
+    position: relative;
+    margin-left: 1rem;
+    display: flex;
+    min-width: 190px;
+    flex-direction: column;
+    align-items: stretch;
+  }
 
-      &.nested {
-        & > .tree {
-          padding: unset;
-        }
-      }
+  .super-tree > .tree {
+    flex: auto;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
 
-      & > * .tree-node {
-        background-color: var(--spectrum-global-color-gray-75);
-        border: 1px solid var(--spectrum-global-color-gray-300);
-        border-radius: 4px;
+  .super-tree.disabled {
+    color: var(--spectrum-global-color-gray-600);
+  }
 
-        &:hover {
-          border-color: var(--spectrum-global-color-gray-400);
-        }
+  .super-tree.list > .tree {
+    gap: 0.25rem;
+    padding: 0.5rem;
+  }
 
-        &.selected {
-          border-color: var(--spectrum-global-color-blue-500);
-        }
+  .super-tree.list.nested > .tree {
+    padding: unset;
+  }
 
-        & > .tree-node-item {
-          padding: 0.25rem;
-          max-height: unset;
-        }
+  .super-tree.list :global(.tree-node) {
+    background-color: var(--spectrum-global-color-gray-75);
+    border: 1px solid var(--spectrum-global-color-gray-300);
+    border-radius: 4px;
+  }
 
-        & > .tree {
-          padding: 0.5rem;
-          gap: 0.5rem;
-          margin-left: 1rem;
-        }
-      }
-    }
+  .super-tree.list :global(.tree-node:hover) {
+    border-color: var(--spectrum-global-color-gray-400);
+  }
 
-    &.flex:not(.nested) {
-      flex: auto;
-    }
+  .super-tree.list :global(.tree-node.selected) {
+    border-color: var(--spectrum-global-color-blue-500);
+  }
+
+  .super-tree.list :global(.tree-node > .tree-node-item) {
+    padding: 0.25rem;
+    max-height: unset;
+  }
+
+  .super-tree.list :global(.tree-node > .tree) {
+    padding: 0.5rem;
+    gap: 0.5rem;
+    margin-left: 1rem;
+  }
+
+  .super-tree.flex:not(.nested) {
+    flex: auto;
   }
 
   .loader {
@@ -1193,27 +1211,29 @@
     align-items: center;
     padding-left: 1rem;
     height: 2rem;
+  }
 
-    &.list {
-      height: 2.6rem;
-    }
+  .loader.list {
+    height: 2.6rem;
+  }
 
-    & > .animation {
-      height: 5px;
-      aspect-ratio: 5;
-      -webkit-mask: linear-gradient(90deg, #0000, #000 20% 80%, #0000);
-      background: radial-gradient(
-          closest-side at 37.5% 50%,
-          var(--spectrum-global-color-blue-500) 94%,
-          #0000
-        )
-        0 / calc(80% / 3) 100%;
-      animation: l48 0.75s infinite linear;
-    }
-    @keyframes l48 {
-      100% {
-        background-position: 36.36%;
-      }
+  .loader > .animation {
+    height: 5px;
+    aspect-ratio: 5;
+    -webkit-mask: linear-gradient(90deg, #0000, #000 20% 80%, #0000);
+    mask: linear-gradient(90deg, #0000, #000 20% 80%, #0000);
+    background: radial-gradient(
+        closest-side at 37.5% 50%,
+        var(--spectrum-global-color-blue-500) 94%,
+        #0000
+      )
+      0 / calc(80% / 3) 100%;
+    animation: l48 0.75s infinite linear;
+  }
+
+  @keyframes l48 {
+    100% {
+      background-position: 36.36%;
     }
   }
 </style>

@@ -1,17 +1,15 @@
 <script>
-  import { getContext, createEventDispatcher, onDestroy } from "svelte";
-  import { SuperButton, SuperPopover } from "@poirazis/supercomponents-shared";
+  import { getContext, createEventDispatcher } from "svelte";
+  import {
+    SuperButton,
+    SuperPopover,
+    Tooltip,
+  } from "@poirazis/supercomponents-shared";
   const { Provider, ContextScopes } = getContext("sdk");
   const treeOptions = getContext("superTreeOptions");
-  import { slide } from "svelte/transition";
+  import Self from "./Tree.svelte";
 
   const dispatch = createEventDispatcher();
-
-  onDestroy(() => {
-    if (tooltipTimer) {
-      clearTimeout(tooltipTimer);
-    }
-  });
 
   export let label;
   export let children = [];
@@ -34,9 +32,7 @@
   let openMenu;
   let menuAnchor;
   let labelElement;
-  let tooltipOpen = false;
-  let tooltipAnchor;
-  let tooltipTimer;
+  let tooltipShow = false;
 
   $: context = {
     ...row,
@@ -80,7 +76,7 @@
     labelElement && labelElement.scrollWidth > labelElement.clientWidth;
 
   function hasSelectedDescendant(children) {
-    if (!children) return false;
+    if (!children || !Array.isArray(children)) return false;
     for (let child of children) {
       if ($selectionStore.includes(child.id)) return true;
       if (child.children && hasSelectedDescendant(child.children)) return true;
@@ -156,10 +152,11 @@
           class="control-content"
           class:flat={flat && !hasChildren && !renderSlot && !isRoot}
         >
-          {#if (hasChildren || renderSlot) && $treeOptions.chevronPosition == "left"}
+          {#if $treeOptions.chevronPosition == "left" && !flat}
             <i
               class="ph ph-caret-right chevron"
               class:locked={hasSelectedDescendant(children, $selectionStore)}
+              class:disabled={!hasChildren && !renderSlot}
               class:open
               on:click={handleClick}
             >
@@ -177,7 +174,7 @@
               openMenu = !openMenu;
               $menuStore = openMenu ? id : false;
             }}
-          />
+          ></i>
         {/if}
 
         {#if hasCheboxes}
@@ -209,18 +206,11 @@
           on:mousedown={selectable ? handleSelect : handleClick}
           on:mouseenter={() => {
             if (isTrimmed) {
-              tooltipTimer = setTimeout(() => {
-                tooltipOpen = true;
-                tooltipAnchor = labelElement;
-              }, 500);
+              tooltipShow = true;
             }
           }}
           on:mouseleave={() => {
-            if (tooltipTimer) {
-              clearTimeout(tooltipTimer);
-              tooltipTimer = null;
-            }
-            tooltipOpen = false;
+            tooltipShow = false;
           }}
         >
           {@html label ?? "Not Set"}
@@ -241,7 +231,8 @@
             openMenu = !openMenu;
             $menuStore = openMenu ? id : false;
           }}
-        />
+        >
+        </i>
       {/if}
 
       {#if hasChildren && rightChevron}
@@ -256,14 +247,11 @@
     </div>
 
     {#if (children?.length || renderSlot) && open}
-      <div
-        class="tree"
-        style:display={open ? "flex" : "none"}
-        transition:slide={{ duration: 230 }}
-      >
-        {#each children as node}
-          <svelte:self
-            {...node}
+      <div class="tree" style:display={open ? "flex" : "none"}>
+        {#each children as child}
+          <Self
+            {...child}
+            children={child.children}
             {hasSlot}
             {list}
             {flat}
@@ -272,7 +260,7 @@
             on:nodeAction
           >
             <slot />
-          </svelte:self>
+          </Self>
         {/each}
 
         {#if renderSlot && $treeOptions.hasSlot}
@@ -285,15 +273,8 @@
   </button>
 {/if}
 
-{#if tooltipOpen}
-  <SuperPopover
-    open
-    align="center"
-    anchor={tooltipAnchor}
-    on:close={() => (tooltipOpen = false)}
-  >
-    <div class="tooltip-content">{@html label}</div>
-  </SuperPopover>
+{#if tooltipShow}
+  <Tooltip anchor={labelElement} content={label} show={tooltipShow} />
 {/if}
 
 {#if hasDropMenu && openMenu}
@@ -354,6 +335,12 @@
   .chevron.locked {
     opacity: 0.5;
     pointer-events: none;
+  }
+
+  .chevron.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+    cursor: pointer;
   }
 
   .children-count {

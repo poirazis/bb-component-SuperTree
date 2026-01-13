@@ -98,7 +98,7 @@
       {#if headerDropMenuItems?.length}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <span class="drop-menu-icon" on:click={handleMenu}>
-          <i class={headerMenuIcon} />
+          <i class={headerMenuIcon}></i>
         </span>
       {/if}
     </div>
@@ -141,7 +141,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 2rem;
+    height: 2.25rem;
     border-bottom: 1px solid transparent;
     background-color: var(--spectrum-global-color-gray-100);
     color: var(--spectrum-global-color-gray-600);

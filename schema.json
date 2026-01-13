@@ -1,17 +1,28 @@
 {
   "type": "component",
-  "metadata": {},
+  "metadata": {
+    "svelteMajor": 5
+  },
   "schema": {
     "name": "bb-component-SuperTree",
     "friendlyName": "Super TreeList",
     "description": "A Tree View component for Budibase",
     "hasChildren": true,
     "showEmptyState": false,
-    "styles": ["size", "padding", "border", "background"],
+    "styles": [
+      "size",
+      "padding",
+      "border",
+      "background"
+    ],
     "icon": "TreeCollapseAll",
     "actions": [
-      { "type": "RefreshDatasource" },
-      { "type": "ClearRowSelection" }
+      {
+        "type": "RefreshDatasource"
+      },
+      {
+        "type": "ClearRowSelection"
+      }
     ],
     "context": [
       {
@@ -110,8 +121,14 @@
         "key": "sortOrder",
         "label": "Sort Order",
         "options": [
-          { "label": "Ascending", "value": "ascending" },
-          { "label": "Descending", "value": "descending" }
+          {
+            "label": "Ascending",
+            "value": "ascending"
+          },
+          {
+            "label": "Descending",
+            "value": "descending"
+          }
         ],
         "dependsOn": {
           "setting": "structuredData",
@@ -146,8 +163,14 @@
         "label": "Control Type",
         "defaultValue": "tree",
         "options": [
-          { "label": "Tree View", "value": "tree" },
-          { "label": "List View", "value": "list" }
+          {
+            "label": "Tree View",
+            "value": "tree"
+          },
+          {
+            "label": "List View",
+            "value": "list"
+          }
         ]
       },
       {
@@ -156,9 +179,18 @@
         "label": "Tree Type",
         "defaultValue": "flat",
         "options": [
-          { "label": "Flat", "value": "flat" },
-          { "label": "Recursive", "value": "recursive" },
-          { "label": "Group By", "value": "groupBy" }
+          {
+            "label": "Flat",
+            "value": "flat"
+          },
+          {
+            "label": "Recursive",
+            "value": "recursive"
+          },
+          {
+            "label": "Group By",
+            "value": "groupBy"
+          }
         ]
       },
       {
@@ -166,14 +198,23 @@
         "key": "joinField",
         "label": "Join Column",
         "resetOn": "datasource",
-        "dependsOn": { "setting": "treeType", "value": "recursive" }
+        "dependsOn": {
+          "setting": "treeType",
+          "value": "recursive"
+        }
       },
       {
         "type": "multifield",
         "key": "groupFields",
         "label": "Group By",
-        "resetOn": ["datasource", "treeType"],
-        "dependsOn": { "setting": "treeType", "value": "groupBy" }
+        "resetOn": [
+          "datasource",
+          "treeType"
+        ],
+        "dependsOn": {
+          "setting": "treeType",
+          "value": "groupBy"
+        }
       },
       {
         "type": "boolean",
@@ -252,9 +293,18 @@
             "key": "searchMode",
             "label": "Search",
             "options": [
-              { "label": "Disabled", "value": false },
-              { "label": "Client Side", "value": "client" },
-              { "label": "Server Side", "value": "server" }
+              {
+                "label": "Disabled",
+                "value": false
+              },
+              {
+                "label": "Client Side",
+                "value": "client"
+              },
+              {
+                "label": "Server Side",
+                "value": "server"
+              }
             ],
             "defaultValue": "client"
           },
@@ -315,7 +365,10 @@
       {
         "section": true,
         "name": "Group By Settings",
-        "dependsOn": { "setting": "treeType", "value": "groupBy" },
+        "dependsOn": {
+          "setting": "treeType",
+          "value": "groupBy"
+        },
         "settings": [
           {
             "type": "text",
@@ -340,7 +393,12 @@
             "type": "buttonConfiguration",
             "key": "groupMenuItems",
             "nested": true,
-            "context": [{ "key": "group", "label": "Group" }],
+            "context": [
+              {
+                "key": "group",
+                "label": "Group"
+              }
+            ],
             "wide": true
           }
         ]
@@ -412,8 +470,14 @@
             "resetOn": "controlType",
             "label": "Chevron",
             "options": [
-              { "label": "Left", "value": "left" },
-              { "label": "Right", "value": "right" }
+              {
+                "label": "Left",
+                "value": "left"
+              },
+              {
+                "label": "Right",
+                "value": "right"
+              }
             ]
           },
           {
@@ -433,12 +497,30 @@
             "label": "Slot Position",
             "defaultValue": "after",
             "options": [
-              { "label": "Disabled", "value": false },
-              { "label": "In Leaf", "value": "leaf" },
-              { "label": "In Branch", "value": "branch" },
-              { "label": "In Group", "value": "group" },
-              { "label": "After Tree", "value": "after" },
-              { "label": "In All Nodes", "value": "all" }
+              {
+                "label": "Disabled",
+                "value": false
+              },
+              {
+                "label": "In Leaf",
+                "value": "leaf"
+              },
+              {
+                "label": "In Branch",
+                "value": "branch"
+              },
+              {
+                "label": "In Group",
+                "value": "group"
+              },
+              {
+                "label": "After Tree",
+                "value": "after"
+              },
+              {
+                "label": "In All Nodes",
+                "value": "all"
+              }
             ]
           }
         ]
@@ -471,7 +553,6 @@
             "label": "Text Color",
             "nested": true
           },
-
           {
             "type": "text",
             "key": "nodeBGColor",
@@ -484,7 +565,10 @@
         "section": true,
         "tag": "style",
         "name": "Group Settings",
-        "dependsOn": { "setting": "treeType", "value": "groupBy" },
+        "dependsOn": {
+          "setting": "treeType",
+          "value": "groupBy"
+        },
         "settings": [
           {
             "type": "phosphorIcon",
