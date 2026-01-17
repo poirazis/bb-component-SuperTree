@@ -1,5 +1,6 @@
 <script>
   import { getContext, createEventDispatcher } from "svelte";
+  import { slide } from "svelte/transition";
   import {
     SuperButton,
     SuperPopover,
@@ -247,7 +248,7 @@
     </div>
 
     {#if (children?.length || renderSlot) && open}
-      <div class="tree" style:display={open ? "flex" : "none"}>
+      <div class="tree" style:display={open ? "flex" : "none"} transition:slide>
         {#each children as child}
           <Self
             {...child}
