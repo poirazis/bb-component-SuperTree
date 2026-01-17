@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "bb-component-SuperTree",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "A Tree View / Tree List component for Budibase",
   "packageManager": "bun@1.0.0",
   "license": "MIT",
