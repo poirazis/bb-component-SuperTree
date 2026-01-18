@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "bb-component-SuperTree",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "A Tree View / Tree List component for Budibase",
   "packageManager": "bun@1.0.0",
   "license": "MIT",
@@ -17,12 +17,13 @@
   "devDependencies": {
     "@budibase/backend-core": "^3.24.0",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
-    "postcss": "^8.5.6",
     "svelte": "^5.0.0",
     "tar": "^7.5.2",
     "terser": "^5.44.1",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
+    "vite-plugin-singlefile": "^2.3.0"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"
